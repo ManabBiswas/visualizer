@@ -1,0 +1,8 @@
+node_modules/
+.next/
+codelens.db
+codelens.db-journal
+codelens.db-wal
+codelens.db-shm
+parser/target/
+.env*.local

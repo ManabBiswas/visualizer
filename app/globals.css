@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-on-background font-sans text-body-md antialiased;
+  }
+
+  ::selection {
+    background-color: rgba(56, 189, 248, 0.25);
+  }
+
+  /* 4px baseline rhythm for resizable split handles: 1px visible stroke, 4px hit area */
+  .split-handle {
+    position: relative;
+  }
+  .split-handle::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 8px;
+    left: -4px;
+  }
+
+  /* Keyboard focus must remain visible per design principles (tactile precision) */
+  :focus-visible {
+    outline: 2px solid theme("colors.primary");
+    outline-offset: 1px;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-surface-container-low border border-panel-border;
+  }
+
+  .label-caps {
+    @apply font-mono text-label-caps uppercase text-text-muted;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-code-sm font-semibold;
+  }
+}
