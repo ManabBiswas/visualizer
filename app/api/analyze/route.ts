@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
+import fs from "fs";
 import { randomUUID } from "crypto";
 import { ProgramIR } from "@/lib/ir";
 import { analyzeComplexity } from "@/lib/complexity/analyze";
@@ -8,12 +9,40 @@ import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 import { generateFlowchart } from "@/lib/flowchart/generate";
 import { getDb } from "@/lib/db/init";
 
-const PARSER_DIR = path.join(process.cwd(), "parser", "target");
+const PARSER_ROOT = path.join(process.cwd(), "parser");
+const CLASSES_DIR = path.join(PARSER_ROOT, "target", "classes");
+const PARSER_JAR = path.join(PARSER_ROOT, "target", "codelens-parser.jar");
 
 function runParser(source: string): Promise<ProgramIR> {
   return new Promise((resolve, reject) => {
-    const child = spawn("java", ["-jar", "codelens-parser.jar"], {
-      cwd: PARSER_DIR,
+    const javaParserJar = process.env.JAVAPARSER_JAR
+      ? path.resolve(process.env.JAVAPARSER_JAR)
+      : path.join(
+          process.env.HOME ?? process.env.USERPROFILE ?? "",
+          ".m2",
+          "repository",
+          "com",
+          "github",
+          "javaparser",
+          "javaparser-core",
+          "3.26.2",
+          "javaparser-core-3.26.2.jar",
+        );
+
+    const hasClasses = fs.existsSync(CLASSES_DIR);
+    const hasJar = fs.existsSync(PARSER_JAR);
+
+    if (!hasClasses && !hasJar) {
+      reject(new Error("Parser is not built yet. Run npm run prepare:parser first."));
+      return;
+    }
+
+    const args = hasJar
+      ? ["-jar", PARSER_JAR]
+      : ["-cp", `${CLASSES_DIR}${path.delimiter}${javaParserJar}`, "codelens.Main"];
+
+    const child = spawn("java", args, {
+      cwd: PARSER_ROOT,
     });
 
     let stdout = "";

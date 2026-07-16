@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "prepare:parser": "node scripts/prepare-parser.cjs",
+    "dev": "npm run prepare:parser && next dev",
+    "build": "npm run prepare:parser && next build",
     "start": "next start",
     "lint": "next lint"
   },

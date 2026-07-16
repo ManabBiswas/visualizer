@@ -201,6 +201,9 @@ public class Main {
 
     private static List<Statement> extractBody(Statement s) {
         if (s instanceof BlockStmt) return ((BlockStmt) s).getStatements();
+        if (s instanceof ForStmt) return extractBody(((ForStmt) s).getBody());
+        if (s instanceof WhileStmt) return extractBody(((WhileStmt) s).getBody());
+        if (s instanceof DoStmt) return extractBody(((DoStmt) s).getBody());
         List<Statement> single = new ArrayList<>();
         single.add(s);
         return single;
