@@ -8,11 +8,14 @@ import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 import { generateFlowchart } from "@/lib/flowchart/generate";
 import { getDb } from "@/lib/db/init";
 
-const PARSER_JAR = path.join(process.cwd(), "parser", "target", "codelens-parser.jar");
+const PARSER_DIR = path.join(process.cwd(), "parser", "target");
 
 function runParser(source: string): Promise<ProgramIR> {
   return new Promise((resolve, reject) => {
-    const child = spawn("java", ["-jar", PARSER_JAR]);
+    const child = spawn("java", ["-jar", "codelens-parser.jar"], {
+      cwd: PARSER_DIR,
+    });
+
     let stdout = "";
     let stderr = "";
 
@@ -27,7 +30,9 @@ function runParser(source: string): Promise<ProgramIR> {
       try {
         resolve(JSON.parse(stdout) as ProgramIR);
       } catch (e) {
-        reject(new Error(`Failed to parse IR JSON from parser output: ${stdout}`));
+        reject(
+          new Error(`Failed to parse IR JSON from parser output: ${stdout}`),
+        );
       }
     });
 
@@ -40,11 +45,19 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { source, problem } = body as {
     source: string;
-    problem?: { name: string; link?: string; topicTags?: string[]; difficulty?: string };
+    problem?: {
+      name: string;
+      link?: string;
+      topicTags?: string[];
+      difficulty?: string;
+    };
   };
 
   if (!source || typeof source !== "string") {
-    return NextResponse.json({ error: "Missing `source` (Java code) in request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing `source` (Java code) in request body." },
+      { status: 400 },
+    );
   }
 
   let ir: ProgramIR;
@@ -53,7 +66,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: `Failed to parse Java source: ${(err as Error).message}` },
-      { status: 422 }
+      { status: 422 },
     );
   }
 
@@ -66,7 +79,7 @@ export async function POST(req: NextRequest) {
       method,
       complexity: analyzeComplexity(method),
       flowchart: generateFlowchart(method),
-    }))
+    })),
   );
 
   let savedProblemId: string | null = null;
@@ -74,21 +87,21 @@ export async function POST(req: NextRequest) {
     const db = getDb();
     savedProblemId = randomUUID();
     db.prepare(
-      `INSERT INTO problems (id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO problems (id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?)`,
     ).run(
       savedProblemId,
       problem.name,
       problem.link ?? null,
       JSON.stringify(problem.topicTags ?? []),
       problem.difficulty ?? null,
-      source
+      source,
     );
 
     const primary = results[0];
     if (primary) {
       db.prepare(
         `INSERT INTO analyses (id, problem_id, time_complexity, space_complexity, time_confidence, space_confidence, ir_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         randomUUID(),
         savedProblemId,
@@ -96,18 +109,14 @@ export async function POST(req: NextRequest) {
         primary.complexity.space.bigO,
         primary.complexity.time.confidence,
         primary.complexity.space.confidence,
-        JSON.stringify(ir)
+        JSON.stringify(ir),
       );
     }
 
     for (const tag of tags) {
-      db.prepare(`INSERT INTO notes (id, problem_id, tag_type, text, line_number) VALUES (?, ?, ?, ?, ?)`).run(
-        randomUUID(),
-        savedProblemId,
-        tag.tag,
-        tag.text,
-        tag.line
-      );
+      db.prepare(
+        `INSERT INTO notes (id, problem_id, tag_type, text, line_number) VALUES (?, ?, ?, ?, ?)`,
+      ).run(randomUUID(), savedProblemId, tag.tag, tag.text, tag.line);
     }
   }
 

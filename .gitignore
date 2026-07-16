@@ -6,3 +6,4 @@ codelens.db-wal
 codelens.db-shm
 parser/target/
 .env*.local
+docs/
