@@ -41,3 +41,6 @@ heuristic (regex over the loop's source text) — good enough for typical DSA co
 (`for (int i = 0; i < arr.length; i++)`, `for (int i = 0; i < n; i++)`) but not a
 full data-flow analysis. Expect to tighten it as you feed it real problems and
 notice misclassifications.
+
+--
+Made by Manab
