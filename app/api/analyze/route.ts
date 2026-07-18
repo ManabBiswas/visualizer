@@ -45,6 +45,19 @@ function runParser(source: string): Promise<ProgramIR> {
       cwd: PARSER_ROOT,
     });
 
+    // Without this handler, a missing `java` binary (guaranteed on Vercel,
+    // which has no JVM) emits an unhandled 'error' event that crashes the
+    // whole serverless function instance instead of just this request.
+    child.on("error", (err) => {
+      reject(
+        new Error(
+          `Could not start the Java parser process (${err.message}). ` +
+            `This usually means Java isn't available in this environment. ` +
+            `See DEPLOYMENT.md if you're seeing this on a deployed instance.`,
+        ),
+      );
+    });
+
     let stdout = "";
     let stderr = "";
 
@@ -112,42 +125,52 @@ export async function POST(req: NextRequest) {
   );
 
   let savedProblemId: string | null = null;
+  let saveWarning: string | null = null;
   if (problem?.name) {
-    const db = getDb();
-    savedProblemId = randomUUID();
-    db.prepare(
-      `INSERT INTO problems (id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      savedProblemId,
-      problem.name,
-      problem.link ?? null,
-      JSON.stringify(problem.topicTags ?? []),
-      problem.difficulty ?? null,
-      source,
-    );
-
-    const primary = results[0];
-    if (primary) {
+    try {
+      const db = getDb();
+      savedProblemId = randomUUID();
       db.prepare(
-        `INSERT INTO analyses (id, problem_id, time_complexity, space_complexity, time_confidence, space_confidence, ir_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO problems (id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(
-        randomUUID(),
         savedProblemId,
-        primary.complexity.time.bigO,
-        primary.complexity.space.bigO,
-        primary.complexity.time.confidence,
-        primary.complexity.space.confidence,
-        JSON.stringify(ir),
+        problem.name,
+        problem.link ?? null,
+        JSON.stringify(problem.topicTags ?? []),
+        problem.difficulty ?? null,
+        source,
       );
-    }
 
-    for (const tag of tags) {
-      db.prepare(
-        `INSERT INTO notes (id, problem_id, tag_type, text, line_number) VALUES (?, ?, ?, ?, ?)`,
-      ).run(randomUUID(), savedProblemId, tag.tag, tag.text, tag.line);
+      const primary = results[0];
+      if (primary) {
+        db.prepare(
+          `INSERT INTO analyses (id, problem_id, time_complexity, space_complexity, time_confidence, space_confidence, ir_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          randomUUID(),
+          savedProblemId,
+          primary.complexity.time.bigO,
+          primary.complexity.space.bigO,
+          primary.complexity.time.confidence,
+          primary.complexity.space.confidence,
+          JSON.stringify(ir),
+        );
+      }
+
+      for (const tag of tags) {
+        db.prepare(
+          `INSERT INTO notes (id, problem_id, tag_type, text, line_number) VALUES (?, ?, ?, ?, ?)`,
+        ).run(randomUUID(), savedProblemId, tag.tag, tag.text, tag.line);
+      }
+    } catch (err) {
+      // On a read-only filesystem (e.g. Vercel, until the Postgres swap in
+      // DEPLOYMENT.md is done) this write will fail. The flowchart/complexity/
+      // notes results are still valid and useful, so we return them anyway
+      // and surface the save failure as a warning rather than a 500.
+      savedProblemId = null;
+      saveWarning = `Analysis succeeded but could not be saved to the log: ${(err as Error).message}`;
     }
   }
 
-  return NextResponse.json({ results, savedProblemId });
+  return NextResponse.json({ results, savedProblemId, saveWarning });
 }
