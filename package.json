@@ -5,9 +5,11 @@
   "scripts": {
     "prepare:parser": "node scripts/prepare-parser.cjs",
     "dev": "npm run prepare:parser && next dev",
-    "build": "npm run prepare:parser && next build",
+    "build": "node scripts/prepare-parser.cjs --skip-if-ci && prisma generate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "next": "16.2.10",
@@ -15,17 +17,18 @@
     "react-dom": "^19.1.0",
     "@monaco-editor/react": "^4.6.0",
     "mermaid": "^11.16.0",
-    "better-sqlite3": "^12.11.1"
+    "@prisma/client": "^6.3.0",
+    "jspdf": "^2.5.2"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
     "@types/node": "^26.1.1",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.6",
-    "@types/better-sqlite3": "^7.6.11",
     "tailwindcss": "^4.3.2",
     "@tailwindcss/postcss": "^4.3.2",
     "eslint": "^9.0.0",
-    "eslint-config-next": "16.2.10"
+    "eslint-config-next": "16.2.10",
+    "prisma": "^6.3.0"
   }
 }
