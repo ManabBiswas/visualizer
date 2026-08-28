@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "Editor" },
   { href: "/log", label: "Log" },
+  { href: "/quiz", label: "Quiz" },
+  { href: "/diff", label: "Diff" },
 ];
 
 export function TopNav() {
