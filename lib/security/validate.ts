@@ -4,6 +4,7 @@
 // bounds/shape validation, dangerous URL schemes, and control-character stripping.
 
 export const MAX_SOURCE_CHARS = 200_000;
+export const MAX_STDIN_CHARS = 100_000;
 export const MAX_NAME_CHARS = 200;
 export const MAX_LINK_CHARS = 2048;
 export const MAX_TOPIC_TAGS = 10;
@@ -50,6 +51,21 @@ export function validateSource(raw: unknown): ValidationResult<string> {
   }
   if (raw.includes("\u0000")) {
     return { ok: false, error: "Source contains invalid characters." };
+  }
+  return { ok: true, value: raw };
+}
+
+/** Console input for the run feature — optional, bounded, no null bytes. */
+export function validateStdin(raw: unknown): ValidationResult<string> {
+  if (raw === undefined || raw === null) return { ok: true, value: "" };
+  if (typeof raw !== "string") {
+    return { ok: false, error: "`stdin` must be a string." };
+  }
+  if (raw.length > MAX_STDIN_CHARS) {
+    return { ok: false, error: `Console input is too large (max ${MAX_STDIN_CHARS} characters).` };
+  }
+  if (raw.includes("\u0000")) {
+    return { ok: false, error: "Console input contains invalid characters." };
   }
   return { ok: true, value: raw };
 }

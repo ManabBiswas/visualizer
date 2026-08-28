@@ -40,22 +40,31 @@ function findJavaParserJar() {
 
 fs.mkdirSync(outDir, { recursive: true });
 
+// Compiles the optional JVM parser CLI (used only when CODELENS_PARSER=java).
+// The default TypeScript parser needs no build step, so missing JDK/jar is a
+// warning, not a failure.
+
 const sources = collectJavaFiles(srcDir);
 if (sources.length === 0) {
-  console.error('No Java parser sources were found to compile.');
-  process.exit(1);
+  console.warn('No Java parser sources found — skipping JVM parser build (TS parser is the default).');
+  process.exit(0);
 }
 
 const javaParserJar = findJavaParserJar();
 if (!javaParserJar) {
-  console.error('JavaParser dependency jar was not found. Install it into your local Maven cache or set JAVAPARSER_JAR.');
-  process.exit(1);
+  console.warn('JavaParser jar not found — skipping JVM parser build (TS parser is the default). Set JAVAPARSER_JAR to build it.');
+  process.exit(0);
 }
 
 const javacCommand = process.platform === 'win32' ? 'javac.exe' : 'javac';
-execFileSync(javacCommand, ['-cp', javaParserJar, '-d', outDir, ...sources], {
-  cwd: rootDir,
-  stdio: 'inherit',
-});
+try {
+  execFileSync(javacCommand, ['-cp', javaParserJar, '-d', outDir, ...sources], {
+    cwd: rootDir,
+    stdio: 'inherit',
+  });
+} catch (err) {
+  console.warn('JVM parser build failed — continuing with the TS parser default.', err.message);
+  process.exit(0);
+}
 
 console.log(`Compiled parser classes to ${outDir}`);

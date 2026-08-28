@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type MutableRefObject } from "react";
-import Editor, { OnMount } from "@monaco-editor/react";
+import { CodeEditor, type CodeEditorHandle } from "@/components/CodeEditor";
 import { FlowchartPanel } from "@/components/FlowchartPanel";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { diffComplexity, ComplexityDelta } from "@/lib/diff/compare";
@@ -68,10 +68,10 @@ export default function DiffPage() {
   const [optimizedResult, setOptimizedResult] = useState<SideResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bruteEditor = useRef<Parameters<OnMount>[0] | null>(null);
-  const optimizedEditor = useRef<Parameters<OnMount>[0] | null>(null);
+  const bruteEditor = useRef<CodeEditorHandle | null>(null);
+  const optimizedEditor = useRef<CodeEditorHandle | null>(null);
 
-  function jump(ref: MutableRefObject<Parameters<OnMount>[0] | null>, line: number | null) {
+  function jump(ref: MutableRefObject<CodeEditorHandle | null>, line: number | null) {
     if (!line) return;
     ref.current?.revealLineInCenter(line);
     ref.current?.setPosition({ lineNumber: line, column: 1 });
@@ -129,14 +129,14 @@ export default function DiffPage() {
           <span className="label-caps border-b border-panel-border bg-surface-container-lowest px-3 py-1.5 text-error">
             Brute Force
           </span>
-          <div className="h-64 bg-editor-bg">
-            <Editor
-              language="java"
-              theme="vs-dark"
+          <div className="h-64 overflow-hidden bg-editor-bg">
+            <CodeEditor
               value={brute}
-              onChange={(v) => setBrute(v ?? "")}
-              onMount={(e) => (bruteEditor.current = e)}
-              options={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, minimap: { enabled: false }, padding: { top: 8 } }}
+              onChange={setBrute}
+              padding={{ top: 8, bottom: 8 }}
+              onMount={(editor) => {
+                bruteEditor.current = editor;
+              }}
             />
           </div>
         </div>
@@ -144,14 +144,14 @@ export default function DiffPage() {
           <span className="label-caps border-b border-panel-border bg-surface-container-lowest px-3 py-1.5 text-success">
             Optimized
           </span>
-          <div className="h-64 bg-editor-bg">
-            <Editor
-              language="java"
-              theme="vs-dark"
+          <div className="h-64 overflow-hidden bg-editor-bg">
+            <CodeEditor
               value={optimized}
-              onChange={(v) => setOptimized(v ?? "")}
-              onMount={(e) => (optimizedEditor.current = e)}
-              options={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, minimap: { enabled: false }, padding: { top: 8 } }}
+              onChange={setOptimized}
+              padding={{ top: 8, bottom: 8 }}
+              onMount={(editor) => {
+                optimizedEditor.current = editor;
+              }}
             />
           </div>
         </div>

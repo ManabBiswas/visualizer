@@ -2,26 +2,10 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import mermaid from "mermaid";
+import { ensureMermaid } from "./mermaidSetup";
+import { PanZoom } from "./PanZoom";
 import { FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
 import { downloadPng, downloadSvg } from "@/lib/export/download";
-
-mermaid.initialize({
-  startOnLoad: false,
-  // Required for the `click ... call` bindings emitted by lib/flowchart/generate.ts
-  securityLevel: "loose",
-  theme: "base",
-  themeVariables: {
-    background: "#10141a",
-    primaryColor: "#10141a",
-    primaryBorderColor: "#38bdf8",
-    primaryTextColor: "#dfe2eb",
-    lineColor: "#87929a",
-    secondaryColor: "#1c2026",
-    tertiaryColor: "#262a31",
-    fontFamily: "JetBrains Mono, monospace",
-    fontSize: "12px",
-  },
-});
 
 export function FlowchartPanel({
   diagram,
@@ -34,9 +18,11 @@ export function FlowchartPanel({
   onNodeHover: (line: number | null) => void;
   showLegend?: boolean;
 }) {
+  ensureMermaid();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Each panel instance gets its own global click handler so multiple
   // flowcharts (e.g. diff mode) never overwrite each other's bindings.
@@ -77,6 +63,17 @@ export function FlowchartPanel({
     return containerRef.current?.querySelector("svg") ?? null;
   }
 
+  async function exportPng() {
+    const svg = getSvg();
+    if (!svg) return;
+    setExportError(null);
+    try {
+      await downloadPng(svg, `${name ?? "flowchart"}-flowchart`);
+    } catch (e) {
+      setExportError(`PNG export failed: ${(e as Error).message}`);
+    }
+  }
+
   if (!diagram) {
     return (
       <div className="flex h-full items-center justify-center text-body-sm text-text-muted">
@@ -92,14 +89,16 @@ export function FlowchartPanel({
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
-        <span className="label-caps">Flowchart{name ? ` — ${name}` : ""}</span>
-        <div className="flex gap-2">
+        <span className="label-caps">Flowchart{name ? ` — ${name}()` : ""}</span>
+        <div className="flex items-center gap-2">
+          {exportError && (
+            <span className="text-code-sm text-error" title={exportError}>
+              {exportError}
+            </span>
+          )}
           <button
             disabled={!rendered}
-            onClick={() => {
-              const svg = getSvg();
-              if (svg) downloadPng(svg, `${name ?? "flowchart"}-flowchart`);
-            }}
+            onClick={exportPng}
             className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary disabled:opacity-40"
             title="Download flowchart as PNG"
           >
@@ -119,8 +118,10 @@ export function FlowchartPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-panel-padding">
-        <div ref={containerRef} />
+      <div className="flex-1 overflow-hidden">
+        <PanZoom>
+          <div ref={containerRef} />
+        </PanZoom>
       </div>
 
       {showLegend && (

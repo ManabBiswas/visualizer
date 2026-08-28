@@ -3,14 +3,16 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Editor, { OnMount } from "@monaco-editor/react";
+import { CodeEditor, type CodeEditorHandle } from "@/components/CodeEditor";
 import { MetadataBar, ProblemMeta } from "@/components/MetadataBar";
 import { FlowchartPanel } from "@/components/FlowchartPanel";
 import { CallGraphPanel } from "@/components/CallGraphPanel";
+import { WalkthroughPanel } from "@/components/WalkthroughPanel";
+import { RunConsole } from "@/components/RunConsole";
 import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
 import { ComplexityResult } from "@/lib/complexity/analyze";
-import { CommentTag } from "@/lib/ir";
+import { CommentTag, StatementNode } from "@/lib/ir";
 import { isValidId } from "@/lib/security/validate";
 
 const EXAMPLE = `class Solution {
@@ -35,12 +37,20 @@ const EXAMPLE = `class Solution {
 
 type AnalyzeResult = {
   className: string;
-  method: { name: string; comments: CommentTag[] };
+  method: { name: string; comments: CommentTag[]; body: StatementNode[] };
   complexity: ComplexityResult;
   flowchart: string;
 };
 
-type RightTab = "flowchart" | "callgraph" | "complexity" | "notes";
+type RightTab = "flowchart" | "blocks" | "callgraph" | "complexity" | "notes";
+
+const TAB_LABELS: Record<RightTab, string> = {
+  flowchart: "Flowchart",
+  blocks: "Blocks",
+  callgraph: "Call Graph",
+  complexity: "Complexity",
+  notes: "Notes",
+};
 
 function EditorPage() {
   const searchParams = useSearchParams();
@@ -55,11 +65,8 @@ function EditorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedProblemId, setSavedProblemId] = useState<string | null>(null);
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
-
-  const handleMount: OnMount = (editor) => {
-    editorRef.current = editor;
-  };
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const editorRef = useRef<CodeEditorHandle | null>(null);
 
   useEffect(() => {
     if (!problemId || !isValidId(problemId)) return;
@@ -112,54 +119,68 @@ function EditorPage() {
   const current = results[activeMethod];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <MetadataBar meta={meta} onChange={setMeta} />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Editor pane */}
-        <div className="flex w-1/2 flex-col border-r border-panel-border">
-          <div className="flex items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
-            <span className="label-caps">Java</span>
-            <button
-              onClick={analyze}
-              disabled={loading}
-              className="rounded bg-primary-container px-3 py-1 text-body-sm font-medium text-on-primary-container disabled:opacity-50"
-            >
-              {loading ? "Analyzing…" : "Analyze"}
-            </button>
+        <div className="flex h-full w-1/2 min-w-0 flex-col border-r border-panel-border">
+          <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="label-caps">Editor</span>
+              <span className="font-mono text-code-sm text-text-muted">Solution.java</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setConsoleOpen((o) => !o)}
+                className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
+                  consoleOpen
+                    ? "border-primary text-primary"
+                    : "border-panel-border text-on-surface-variant hover:text-on-surface"
+                }`}
+                title="Toggle the run console (execute your code with stdin input)"
+              >
+                {consoleOpen ? "Console ▾" : "Console ▸"}
+              </button>
+              <button
+                onClick={analyze}
+                disabled={loading}
+                className="rounded bg-primary-container px-4 py-1.5 text-body-sm font-semibold text-on-primary-container hover:opacity-90 disabled:opacity-50"
+              >
+                {loading ? "Analyzing…" : "Analyze"}
+              </button>
+            </div>
           </div>
-          <div className="flex-1 bg-editor-bg">
-            <Editor
-              language="java"
-              theme="vs-dark"
+          <div className="min-h-0 flex-1 overflow-hidden bg-editor-bg">
+            <CodeEditor
               value={code}
-              onChange={(v) => setCode(v ?? "")}
-              onMount={handleMount}
-              options={{
-                fontFamily: "JetBrains Mono, monospace",
-                fontSize: 13,
-                minimap: { enabled: false },
-                padding: { top: 12 },
+              onChange={setCode}
+              onMount={(editor) => {
+                editorRef.current = editor;
               }}
             />
           </div>
+          {consoleOpen && <RunConsole code={code} />}
           {error && (
-            <div className="border-t border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
+            <div className="shrink-0 border-t border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
               {error}
             </div>
           )}
         </div>
 
         {/* Analysis pane */}
-        <div className="flex w-1/2 flex-col">
+        <div className="flex h-full w-1/2 min-w-0 flex-col">
           {results.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
+            <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
+              <span className="label-caps shrink-0">Methods</span>
               {results.map((r, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveMethod(i)}
                   className={`whitespace-nowrap rounded px-2 py-0.5 font-mono text-code-sm ${
-                    i === activeMethod ? "bg-primary-container text-on-primary-container" : "text-text-muted"
+                    i === activeMethod
+                      ? "bg-primary-container text-on-primary-container"
+                      : "text-text-muted hover:bg-surface-container-high hover:text-on-surface"
                   }`}
                 >
                   {r.method.name}()
@@ -168,23 +189,25 @@ function EditorPage() {
             </div>
           )}
 
-          <div className="flex border-b border-panel-border">
+          <div className="flex shrink-0 border-b border-panel-border bg-surface-container-lowest">
             {((callGraph
-              ? ["flowchart", "callgraph", "complexity", "notes"]
-              : ["flowchart", "complexity", "notes"]) as RightTab[]).map((t) => (
+              ? ["flowchart", "blocks", "callgraph", "complexity", "notes"]
+              : ["flowchart", "blocks", "complexity", "notes"]) as RightTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`border-b-2 px-4 py-2 text-body-sm capitalize ${
-                  tab === t ? "border-primary text-on-surface" : "border-transparent text-text-muted"
+                className={`border-b-2 px-4 py-2 text-body-sm font-medium ${
+                  tab === t
+                    ? "border-primary bg-surface-container text-primary"
+                    : "border-transparent text-text-muted hover:text-on-surface"
                 }`}
               >
-                {t === "callgraph" ? "Call Graph" : t}
+                {TAB_LABELS[t]}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {tab === "flowchart" && (
               <FlowchartPanel
                 diagram={current?.flowchart ?? null}
@@ -192,6 +215,7 @@ function EditorPage() {
                 onNodeHover={(line) => line && jumpToLine(line)}
               />
             )}
+            {tab === "blocks" && <WalkthroughPanel body={current?.method.body} onJump={jumpToLine} />}
             {tab === "callgraph" && callGraph && (
               <CallGraphPanel
                 diagram={callGraph}

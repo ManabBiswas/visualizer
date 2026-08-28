@@ -4,9 +4,11 @@ CodeLens is a local-first Java DSA analysis and revision tool for interview prep
 
 ## What it does
 
-- Analyzes Java source code with a JavaParser-based backend
-- Renders **multi-color flowcharts** — loops, decisions, calls, recursion, and returns each get their own color, with actual code (conditions, statements, call args) in the node labels and a built-in color legend
+- Analyzes Java source code with an in-process TypeScript parser (java-parser); JVM CLI kept as an opt-in cross-check
+- Renders **multi-color flowcharts** — loops, decisions, calls, recursion, and returns each get their own color, with actual code (conditions, statements, call args) in the node labels and a built-in color legend. Diagrams open in a **pan/zoom viewer**: drag to pan, scroll to zoom, Fit/1:1 buttons, auto-fit on load
+- **Blocks walkthrough**: the method as readable per-section block cards — one card per statement with type badges, loop-bound hints, recursion flags, nested indentation, and jump-to-line — for understanding the structure without reading the graph
 - Shows your **tagged comments inside the flowchart** as note nodes attached to the code they annotate (`// q:`, `// note:`, `// why:`, `// complexity:` — standalone or trailing after code)
+- **Run console**: execute your code with real console input — type stdin (what your `Scanner` / `BufferedReader` reads), hit Run (or Ctrl+Enter), and see stdout/stderr, exit code and timing. Compiles and runs in an isolated temp directory with hard timeouts, output caps, JVM heap limits, rate limiting and a concurrency guard
 - Estimates time/space complexity with confidence scores and reasoning — detects nested loops, linear/halving/branching recursion (log n, n log n, 2^n), iterative binary search, sorting calls, and auxiliary allocations
 - **Self-check mode**: guess the complexity before revealing the estimate, with right/wrong scoring
 - **Call graph** for multi-method problems (e.g. DFS with a helper): internal methods and library calls as a navigable graph — click a method to jump to its flowchart
@@ -22,7 +24,7 @@ CodeLens is a local-first Java DSA analysis and revision tool for interview prep
 
 - Next.js 16 + TypeScript + React 19
 - Monaco editor for Java input
-- JavaParser CLI in `parser/`
+- java-parser (TypeScript) for parsing; optional JavaParser CLI in `parser/`
 - SQLite (better-sqlite3) for local problem tracking
 - Mermaid for flowchart rendering
 - Vitest for tests
@@ -62,16 +64,19 @@ app/                  Next.js routes and pages
   api/problems/       log listing + single-problem retrieval
   api/quiz/           quiz cards + spaced-repetition review
   api/notes/          quiz answer editing
+  api/run/            compile + execute Java with stdin input
   log/                problem log page with filters and exports
   quiz/               spaced-repetition quiz page
   diff/               brute-force vs optimized comparison page
 components/           UI panels (editor chrome, flowchart, complexity, notes)
 lib/
+  parser/             TypeScript Java parser (primary) + JVM runner (fallback)
   complexity/         complexity heuristics
   notes/              comment tag extraction
   flowchart/          IR -> Mermaid conversion (multi-color, comment notes)
   diff/               complexity delta comparison
   spaced/             SM-2 spaced repetition scheduler
+  run/                main-class detection + sandboxed Java compile/execute
   export/             PNG/SVG/Markdown/CSV/Anki download helpers
   security/           input validation, sanitization, rate limiting
   db/                 SQLite setup
@@ -114,11 +119,13 @@ Input is treated as hostile by default (`lib/security/`):
 
 ## Notes on the parser
 
-The parser in `parser/src/main/java/codelens/Main.java` is heuristic-driven but covers common DSA patterns well: nested loops, enhanced for-loops, recursion hidden inside return statements and expressions, receiver-qualified library calls (`Arrays.sort`), and loop-bound classification (constant / parameter / input-dependent / unknown). Complexity results always carry a confidence badge and reasoning — they are estimates, not proofs.
+Java parsing runs **in-process in TypeScript** via [java-parser](https://www.npmjs.com/package/java-parser) (`lib/parser/javaTs.ts`) — no JVM, no build step, works on serverless, ~200ms per analysis. The original JVM CLI (`parser/src/main/java/codelens/Main.java`, JavaParser-based) is kept as an opt-in cross-check: set `CODELENS_PARSER=java` (requires JDK 17 + `npm run prepare:parser`). A parity test suite verifies both engines produce identical complexity classifications, loop bounds and call targets.
+
+The parser is heuristic-driven but covers common DSA patterns well: nested loops, enhanced for-loops, recursion hidden inside return statements and expressions, receiver-qualified library calls (`Arrays.sort`), and loop-bound classification (constant / parameter / input-dependent / unknown). Complexity results always carry a confidence badge and reasoning — they are estimates, not proofs.
 
 ## Status
 
-Working local product: analysis pipeline, multi-color flowcharts with embedded comment notes, call graph, diff mode (brute force vs optimized), spaced-repetition quiz with Anki export, PNG/SVG/Markdown/CSV exports, self-check scoring, input-validation security layer, problem log with reopen, and a full test suite (74 tests). Next: the multi-user open-source platform (auth + cloud DB + hosted parsing).
+Working local product: analysis pipeline (in-process TS parser, no JVM required), multi-color flowcharts with embedded comment notes, call graph, diff mode (brute force vs optimized), spaced-repetition quiz with Anki export, PNG/SVG/Markdown/CSV exports, self-check scoring, input-validation security layer, problem log with reopen, and a full test suite (89 tests incl. TS/JVM parser parity). Next: the multi-user open-source platform (auth + cloud DB + deployment).
 
 ---
 Made by Manab.

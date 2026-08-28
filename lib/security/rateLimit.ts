@@ -50,8 +50,22 @@ export function activeParserCount(): number {
   return activeParserProcesses;
 }
 
+let activeRunProcesses = 0;
+
+/** Concurrency guard for the code-run feature (heavier than parsing). */
+export function tryAcquireRunSlot(maxConcurrent: number): boolean {
+  if (activeRunProcesses >= maxConcurrent) return false;
+  activeRunProcesses += 1;
+  return true;
+}
+
+export function releaseRunSlot(): void {
+  activeRunProcesses = Math.max(0, activeRunProcesses - 1);
+}
+
 /** Test helper. */
 export function resetSecurityState(): void {
   buckets.clear();
   activeParserProcesses = 0;
+  activeRunProcesses = 0;
 }

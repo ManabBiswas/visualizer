@@ -2,24 +2,9 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import mermaid from "mermaid";
+import { ensureMermaid } from "./mermaidSetup";
+import { PanZoom } from "./PanZoom";
 import { downloadPng, downloadSvg } from "@/lib/export/download";
-
-mermaid.initialize({
-  startOnLoad: false,
-  securityLevel: "loose",
-  theme: "base",
-  themeVariables: {
-    background: "#10141a",
-    primaryColor: "#10141a",
-    primaryBorderColor: "#38bdf8",
-    primaryTextColor: "#dfe2eb",
-    lineColor: "#87929a",
-    secondaryColor: "#1c2026",
-    tertiaryColor: "#262a31",
-    fontFamily: "JetBrains Mono, monospace",
-    fontSize: "12px",
-  },
-});
 
 export function CallGraphPanel({
   diagram,
@@ -30,9 +15,11 @@ export function CallGraphPanel({
   name?: string;
   onMethodClick: (methodName: string) => void;
 }) {
+  ensureMermaid();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const rawId = useId();
   const handlerName = useMemo(
@@ -67,6 +54,17 @@ export function CallGraphPanel({
       .catch((e) => setError(String(e)));
   }, [scopedDiagram]);
 
+  async function exportPng() {
+    const svg = containerRef.current?.querySelector("svg");
+    if (!svg) return;
+    setExportError(null);
+    try {
+      await downloadPng(svg, name ?? "callgraph");
+    } catch (e) {
+      setExportError(`PNG export failed: ${(e as Error).message}`);
+    }
+  }
+
   if (!diagram) {
     return (
       <div className="flex h-full items-center justify-center text-body-sm text-text-muted">
@@ -83,13 +81,11 @@ export function CallGraphPanel({
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
         <span className="label-caps">Call graph — click a method to open its flowchart</span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {exportError && <span className="text-code-sm text-error">{exportError}</span>}
           <button
             disabled={!rendered}
-            onClick={() => {
-              const svg = containerRef.current?.querySelector("svg");
-              if (svg) downloadPng(svg, `${name ?? "callgraph"}`);
-            }}
+            onClick={exportPng}
             className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary disabled:opacity-40"
           >
             PNG
@@ -98,7 +94,7 @@ export function CallGraphPanel({
             disabled={!rendered}
             onClick={() => {
               const svg = containerRef.current?.querySelector("svg");
-              if (svg) downloadSvg(svg, `${name ?? "callgraph"}`);
+              if (svg) downloadSvg(svg, name ?? "callgraph");
             }}
             className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary disabled:opacity-40"
           >
@@ -106,8 +102,10 @@ export function CallGraphPanel({
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-panel-padding">
-        <div ref={containerRef} />
+      <div className="flex-1 overflow-hidden">
+        <PanZoom>
+          <div ref={containerRef} />
+        </PanZoom>
       </div>
     </div>
   );
