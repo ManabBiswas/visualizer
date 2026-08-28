@@ -60,7 +60,12 @@ async function buildFlowchartPng(
   method: MethodIR,
 ): Promise<{ dataUrl: string; width: number; height: number } | null> {
   try {
-    const lightDiagram = generateFlowchart(method, "light");
+    // Strip the interactive `click … call …` bindings: they reference a handler
+    // that only exists in the live panel, and a static PDF image doesn't need them.
+    const lightDiagram = generateFlowchart(method, "light")
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("click "))
+      .join("\n");
     const source = await renderDiagramWithTheme(lightDiagram, "light");
     const svg = svgFromString(source);
     if (!svg) return null;

@@ -35,7 +35,6 @@ const OPTIMIZED_EXAMPLE = `class Solution {
 type SideResult = {
   method: MethodIR;
   complexity: ComplexityResult;
-  flowchart: string;
 };
 
 const VERDICT_STYLE: Record<ComplexityDelta["time"]["verdict"], string> = {

@@ -5,7 +5,6 @@ import { parseJava } from "@/lib/parser";
 import { analyzeComplexity } from "@/lib/complexity/analyze";
 import { analyzeBlockComplexity } from "@/lib/complexity/blocks";
 import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
-import { generateFlowchart } from "@/lib/flowchart/generate";
 import { generateCallGraph } from "@/lib/flowchart/callGraph";
 import { getDb } from "@/lib/db/init";
 import { validateSource, validateProblemMeta } from "@/lib/security/validate";
@@ -87,7 +86,6 @@ export async function POST(req: NextRequest) {
       method,
       complexity: analyzeComplexity(method),
       blockComplexity: analyzeBlockComplexity(method),
-      flowchart: generateFlowchart(method),
     })),
   );
 

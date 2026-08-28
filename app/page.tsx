@@ -41,7 +41,6 @@ type AnalyzeResult = {
   method: MethodIR;
   complexity: ComplexityResult;
   blockComplexity: BlockComplexity[];
-  flowchart: string;
 };
 
 type RightTab = "flowchart" | "blocks" | "callgraph" | "complexity" | "notes";
