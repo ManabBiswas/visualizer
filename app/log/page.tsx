@@ -151,7 +151,7 @@ export default function LogPage() {
             {problems.map((p) => (
               <tr
                 key={p.id}
-                onClick={() => router.push(`/?problem=${p.id}`)}
+                onClick={() => router.push(`/analyze?problem=${p.id}`)}
                 className="cursor-pointer border-b border-panel-border hover:bg-surface-container-low"
                 title="Open this problem in the editor"
               >
