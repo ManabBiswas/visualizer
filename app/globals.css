@@ -101,6 +101,59 @@
   --spacing-stack-gap: 0.75rem;
 }
 
+/*
+ * Light theme. The @theme block above defines the dark palette on :root (inside
+ * @layer theme). These unlayered overrides win whenever <html data-theme="light">
+ * is set, and every Tailwind color utility resolves through var(--color-*), so the
+ * whole UI re-skins without touching any component.
+ */
+[data-theme="light"] {
+  --color-surface: #ffffff;
+  --color-surface-dim: #f6f8fa;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f6f8fa;
+  --color-surface-container: #eef1f4;
+  --color-surface-container-high: #e6eaee;
+  --color-surface-container-highest: #dce1e6;
+  --color-on-surface: #1f2328;
+  --color-on-surface-variant: #444c56;
+  --color-inverse-surface: #24292f;
+  --color-inverse-on-surface: #f6f8fa;
+  --color-outline: #6e7781;
+  --color-outline-variant: #d0d7de;
+  --color-surface-tint: #0969da;
+  --color-primary: #0969da;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #0969da;
+  --color-on-primary-container: #ffffff;
+  --color-inverse-primary: #66b3ff;
+  --color-secondary: #57606a;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #e6eaee;
+  --color-on-secondary-container: #33393f;
+  --color-tertiary: #9a6700;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #fff8c5;
+  --color-on-tertiary-container: #7d4e00;
+  --color-error: #d1242f;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffebe9;
+  --color-on-error-container: #82071e;
+  --color-background: #ffffff;
+  --color-on-background: #1f2328;
+  --color-surface-variant: #e6eaee;
+  --color-editor-bg: #ffffff;
+  --color-panel-border: #d0d7de;
+  --color-text-high-contrast: #1f2328;
+  --color-text-muted: #6e7781;
+  --color-success: #1a7f37;
+  --color-warning: #9a6700;
+  --color-note-badge: #0969da;
+  --color-why-badge: #8250df;
+  --color-complexity-badge: #bc4c00;
+}
+
 @layer base {
   html {
     color-scheme: dark;
