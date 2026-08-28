@@ -7,6 +7,13 @@ function triggerDownload(url: string, filename: string) {
   a.remove();
 }
 
+/** Parse a serialized SVG string into an element (used for themed exports). */
+export function svgFromString(source: string): SVGSVGElement | null {
+  const holder = document.createElement("div");
+  holder.innerHTML = source;
+  return holder.querySelector("svg");
+}
+
 function sanitizeFilename(name: string): string {
   return name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "codelens";
 }
@@ -47,10 +54,17 @@ export function downloadSvg(svg: SVGSVGElement, name: string) {
   downloadText(source, `${sanitizeFilename(name)}.svg`, "image/svg+xml");
 }
 
-export function downloadPng(svg: SVGSVGElement, name: string, background = "#10141a"): Promise<void> {
+/**
+ * Rasterize an SVG element to a PNG data URL. Shared by the PNG download and
+ * the PDF report (which embeds the flowchart as an image).
+ */
+export function svgToPngDataUrl(
+  svg: SVGSVGElement,
+  background = "#ffffff",
+  scale = 2,
+): Promise<{ dataUrl: string; width: number; height: number }> {
   const { source, w, h } = prepareSvg(svg);
   const svgUrl = URL.createObjectURL(new Blob([source], { type: "image/svg+xml;charset=utf-8" }));
-  const scale = 2;
 
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -66,16 +80,7 @@ export function downloadPng(svg: SVGSVGElement, name: string, background = "#101
         ctx.scale(scale, scale);
         ctx.drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(svgUrl);
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            reject(new Error("PNG encoding failed."));
-            return;
-          }
-          const url = URL.createObjectURL(blob);
-          triggerDownload(url, `${sanitizeFilename(name)}.png`);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          resolve();
-        }, "image/png");
+        resolve({ dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height });
       } catch (err) {
         URL.revokeObjectURL(svgUrl);
         reject(err instanceof Error ? err : new Error(String(err)));
@@ -87,4 +92,9 @@ export function downloadPng(svg: SVGSVGElement, name: string, background = "#101
     };
     img.src = svgUrl;
   });
+}
+
+export async function downloadPng(svg: SVGSVGElement, name: string, background = "#ffffff"): Promise<void> {
+  const { dataUrl } = await svgToPngDataUrl(svg, background, 2);
+  triggerDownload(dataUrl, `${sanitizeFilename(name)}.png`);
 }

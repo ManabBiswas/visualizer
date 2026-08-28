@@ -62,21 +62,22 @@ export function PanZoom({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Auto-fit whenever a diagram is injected/replaced inside the viewer.
+  // Load at native size (100%) whenever a diagram is injected/replaced.
+  // Users can still press Fit to see the whole diagram.
   useEffect(() => {
     const content = contentRef.current;
     if (!content) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const observer = new MutationObserver(() => {
       clearTimeout(timer);
-      timer = setTimeout(fit, 30);
+      timer = setTimeout(() => setView({ x: 24, y: 24, k: 1 }), 30);
     });
     observer.observe(content, { childList: true, subtree: true });
     return () => {
       observer.disconnect();
       clearTimeout(timer);
     };
-  }, [fit]);
+  }, []);
 
   // Wheel zoom needs a non-passive listener to prevent page scroll.
   useEffect(() => {

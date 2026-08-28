@@ -5,7 +5,7 @@ import { CodeEditor, type CodeEditorHandle } from "@/components/CodeEditor";
 import { FlowchartPanel } from "@/components/FlowchartPanel";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { diffComplexity, ComplexityDelta } from "@/lib/diff/compare";
-import { CommentTag } from "@/lib/ir";
+import { MethodIR } from "@/lib/ir";
 
 const BRUTE_EXAMPLE = `class Solution {
     int[] twoSum(int[] nums, int target) {
@@ -33,7 +33,7 @@ const OPTIMIZED_EXAMPLE = `class Solution {
 `;
 
 type SideResult = {
-  method: { name: string; comments: CommentTag[] };
+  method: MethodIR;
   complexity: ComplexityResult;
   flowchart: string;
 };
@@ -190,15 +190,15 @@ export default function DiffPage() {
           <div className="grid flex-1 grid-cols-1 lg:grid-cols-2">
             <div className="h-[32rem] border-panel-border lg:border-r">
               <FlowchartPanel
-                diagram={bruteResult.flowchart}
-                name={`brute: ${bruteResult.method.name}()`}
+                method={bruteResult.method}
+                label={`brute: ${bruteResult.method.name}()`}
                 onNodeHover={(line) => jump(bruteEditor, line)}
               />
             </div>
             <div className="h-[32rem]">
               <FlowchartPanel
-                diagram={optimizedResult.flowchart}
-                name={`optimized: ${optimizedResult.method.name}()`}
+                method={optimizedResult.method}
+                label={`optimized: ${optimizedResult.method.name}()`}
                 onNodeHover={(line) => jump(optimizedEditor, line)}
                 showLegend={false}
               />

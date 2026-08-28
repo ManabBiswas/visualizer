@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import { StatementNode } from "@/lib/ir";
 import { buildWalkthrough, WalkEntry } from "@/lib/walkthrough/flatten";
+import { BlockComplexity } from "@/lib/complexity/blocks";
 
 const KIND_STYLE: Record<string, { border: string; badge: string; label: string }> = {
   loop: { border: "border-l-[#d2a8ff]", badge: "bg-[#d2a8ff]/15 text-[#d2a8ff]", label: "LOOP" },
@@ -49,10 +51,18 @@ function nodeLine(node: StatementNode): number {
 export function WalkthroughPanel({
   body,
   onJump,
+  blockComplexity,
 }: {
   body: StatementNode[] | undefined;
   onJump: (line: number) => void;
+  blockComplexity?: BlockComplexity[];
 }) {
+  const complexityByLine = useMemo(() => {
+    const map = new Map<number, BlockComplexity>();
+    for (const b of blockComplexity ?? []) map.set(b.line, b);
+    return map;
+  }, [blockComplexity]);
+
   if (!body || body.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-body-sm text-text-muted">
@@ -66,17 +76,25 @@ export function WalkthroughPanel({
   return (
     <div className="flex h-full flex-col gap-1.5 overflow-auto p-panel-padding">
       <p className="mb-1 text-body-sm text-text-muted">
-        The method as readable blocks — one card per statement, nested bodies indented. Click a line number to jump
-        to the code.
+        The method as readable blocks — one card per statement, nested bodies indented. Loops and calls show their own
+        time/space cost. Click a line number to jump to the code.
       </p>
       {entries.map((entry, i) => (
-        <Entry key={i} entry={entry} onJump={onJump} />
+        <Entry key={i} entry={entry} onJump={onJump} complexity={complexityByLine} />
       ))}
     </div>
   );
 }
 
-function Entry({ entry, onJump }: { entry: WalkEntry; onJump: (line: number) => void }) {
+function Entry({
+  entry,
+  onJump,
+  complexity,
+}: {
+  entry: WalkEntry;
+  onJump: (line: number) => void;
+  complexity: Map<number, BlockComplexity>;
+}) {
   if (entry.kind === "divider") {
     return (
       <div className="mt-1 flex items-center gap-2" style={{ marginLeft: entry.depth * 22 + 10 }}>
@@ -116,6 +134,17 @@ function Entry({ entry, onJump }: { entry: WalkEntry; onJump: (line: number) => 
       <p className="mt-1 break-words font-mono text-code-md text-text-high-contrast">{nodeText(node)}</p>
       {node.type === "loop" && (
         <p className="mt-0.5 text-body-sm text-text-muted">{BOUND_HINT[node.boundType]}</p>
+      )}
+      {(node.type === "loop" || node.type === "call") && complexity.get(line) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-panel-border pt-1.5">
+          <span className="badge bg-complexity-badge/15 text-complexity-badge" title="Time complexity of this block">
+            ⏱ {complexity.get(line)!.time}
+          </span>
+          <span className="badge bg-note-badge/15 text-note-badge" title="Space complexity of this block">
+            💾 {complexity.get(line)!.space}
+          </span>
+          <span className="basis-full text-body-sm text-text-muted">{complexity.get(line)!.note}</span>
+        </div>
       )}
     </div>
   );

@@ -12,7 +12,8 @@ import { RunConsole } from "@/components/RunConsole";
 import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
 import { ComplexityResult } from "@/lib/complexity/analyze";
-import { CommentTag, StatementNode } from "@/lib/ir";
+import { BlockComplexity } from "@/lib/complexity/blocks";
+import { CommentTag, MethodIR } from "@/lib/ir";
 import { isValidId } from "@/lib/security/validate";
 
 const EXAMPLE = `class Solution {
@@ -37,8 +38,9 @@ const EXAMPLE = `class Solution {
 
 type AnalyzeResult = {
   className: string;
-  method: { name: string; comments: CommentTag[]; body: StatementNode[] };
+  method: MethodIR;
   complexity: ComplexityResult;
+  blockComplexity: BlockComplexity[];
   flowchart: string;
 };
 
@@ -60,12 +62,15 @@ function EditorPage() {
   const [meta, setMeta] = useState<ProblemMeta>({ name: "", link: "", topicTags: [], difficulty: "" });
   const [results, setResults] = useState<AnalyzeResult[]>([]);
   const [callGraph, setCallGraph] = useState<string | null>(null);
+  const [callGraphLight, setCallGraphLight] = useState<string | null>(null);
   const [activeMethod, setActiveMethod] = useState(0);
   const [tab, setTab] = useState<RightTab>("flowchart");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedProblemId, setSavedProblemId] = useState<string | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
   const editorRef = useRef<CodeEditorHandle | null>(null);
 
   useEffect(() => {
@@ -107,6 +112,7 @@ function EditorPage() {
       if (!res.ok) throw new Error(data.error ?? "Analysis failed.");
       setResults(data.results);
       setCallGraph(data.callGraph ?? null);
+      setCallGraphLight(data.callGraphLight ?? null);
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
     } catch (e) {
@@ -117,6 +123,31 @@ function EditorPage() {
   }
 
   const current = results[activeMethod];
+
+  async function downloadReport() {
+    if (!current) return;
+    setReporting(true);
+    setReportError(null);
+    try {
+      // Lazy-load the report generator so jspdf/mermaid stay out of the
+      // initial bundle and are only fetched when a report is requested.
+      const { downloadPdfReport } = await import("@/lib/export/report");
+      await downloadPdfReport({
+        title: meta.name || `${current.method.name} — complexity report`,
+        difficulty: meta.difficulty || undefined,
+        topicTags: meta.topicTags,
+        link: meta.link || undefined,
+        code,
+        method: current.method,
+        complexity: current.complexity,
+        blockComplexity: current.blockComplexity,
+      });
+    } catch (e) {
+      setReportError(`PDF export failed: ${(e as Error).message}`);
+    } finally {
+      setReporting(false);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -143,6 +174,14 @@ function EditorPage() {
                 {consoleOpen ? "Console ▾" : "Console ▸"}
               </button>
               <button
+                onClick={downloadReport}
+                disabled={!current || reporting}
+                className="rounded border border-panel-border px-3 py-1.5 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
+                title="Download a light-theme PDF report: code, complexity, blocks, notes and flowchart"
+              >
+                {reporting ? "Building…" : "PDF Report"}
+              </button>
+              <button
                 onClick={analyze}
                 disabled={loading}
                 className="rounded bg-primary-container px-4 py-1.5 text-body-sm font-semibold text-on-primary-container hover:opacity-90 disabled:opacity-50"
@@ -161,9 +200,9 @@ function EditorPage() {
             />
           </div>
           {consoleOpen && <RunConsole code={code} />}
-          {error && (
+          {(error || reportError) && (
             <div className="shrink-0 border-t border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
-              {error}
+              {error ?? reportError}
             </div>
           )}
         </div>
@@ -210,15 +249,21 @@ function EditorPage() {
           <div className="min-h-0 flex-1 overflow-hidden">
             {tab === "flowchart" && (
               <FlowchartPanel
-                diagram={current?.flowchart ?? null}
-                name={current?.method.name}
+                method={current?.method ?? null}
                 onNodeHover={(line) => line && jumpToLine(line)}
               />
             )}
-            {tab === "blocks" && <WalkthroughPanel body={current?.method.body} onJump={jumpToLine} />}
+            {tab === "blocks" && (
+              <WalkthroughPanel
+                body={current?.method.body}
+                onJump={jumpToLine}
+                blockComplexity={current?.blockComplexity}
+              />
+            )}
             {tab === "callgraph" && callGraph && (
               <CallGraphPanel
                 diagram={callGraph}
+                diagramLight={callGraphLight}
                 name={meta.name || "problem"}
                 onMethodClick={(methodName) => {
                   const idx = results.findIndex((r) => r.method.name === methodName);

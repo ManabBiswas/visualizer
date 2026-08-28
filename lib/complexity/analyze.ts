@@ -9,7 +9,7 @@ export type ComplexityResult = {
 
 // Known library call costs. Call targets are receiver-qualified by the parser
 // (e.g. "Arrays.sort"), so keys must be qualified the same way.
-const CALL_COSTS: Record<string, { bigO: string; note: string }> = {
+export const CALL_COSTS: Record<string, { bigO: string; note: string }> = {
   "Arrays.sort": { bigO: "n log n", note: "Arrays.sort uses a dual-pivot quicksort/timsort hybrid" },
   "Collections.sort": { bigO: "n log n", note: "Collections.sort is a stable mergesort" },
   "List.sort": { bigO: "n log n", note: "List.sort is a stable mergesort" },
@@ -114,11 +114,11 @@ function statementTexts(body: StatementNode[]): string[] {
     .map((n) => n.text);
 }
 
-function hasHalvingAssignment(body: StatementNode[]): boolean {
+export function hasHalvingAssignment(body: StatementNode[]): boolean {
   return statementTexts(body).some((t) => HALVING_ASSIGNMENT.test(t));
 }
 
-function hasAuxAllocation(body: StatementNode[]): { found: boolean; inLoop: boolean } {
+export function hasAuxAllocation(body: StatementNode[]): { found: boolean; inLoop: boolean } {
   let inLoop = false;
   function walk(nodes: StatementNode[], insideLoop: boolean): boolean {
     let found = false;

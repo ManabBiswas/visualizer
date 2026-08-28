@@ -2,27 +2,32 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import mermaid from "mermaid";
-import { ensureMermaid } from "./mermaidSetup";
+import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
 import { PanZoom } from "./PanZoom";
-import { FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
-import { downloadPng, downloadSvg } from "@/lib/export/download";
+import { generateFlowchart, FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
+import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
+import { useTheme } from "@/lib/theme";
+import type { MethodIR } from "@/lib/ir";
 
 export function FlowchartPanel({
-  diagram,
-  name,
+  method,
   onNodeHover,
   showLegend = true,
+  label,
 }: {
-  diagram: string | null;
-  name?: string;
+  method: MethodIR | null;
   onNodeHover: (line: number | null) => void;
   showLegend?: boolean;
+  label?: string;
 }) {
-  ensureMermaid();
+  const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const name = method?.name;
 
   // Each panel instance gets its own global click handler so multiple
   // flowcharts (e.g. diff mode) never overwrite each other's bindings.
@@ -31,10 +36,12 @@ export function FlowchartPanel({
     () => `onFlowchartNodeClick_${rawId.replace(/[^a-zA-Z0-9]/g, "")}`,
     [rawId]
   );
-  const scopedDiagram = useMemo(
-    () => (diagram ? diagram.replaceAll("onFlowchartNodeClick", handlerName) : null),
-    [diagram, handlerName]
-  );
+
+  // Generate the diagram for the current UI theme so it re-skins with the app.
+  const scopedDiagram = useMemo(() => {
+    if (!method) return null;
+    return generateFlowchart(method, theme).replaceAll("onFlowchartNodeClick", handlerName);
+  }, [method, theme, handlerName]);
 
   useEffect(() => {
     (window as any)[handlerName] = (line: string) => onNodeHover(Number(line));
@@ -47,6 +54,7 @@ export function FlowchartPanel({
     if (!scopedDiagram || !containerRef.current) return;
     setError(null);
     setRendered(false);
+    ensureMermaid(theme);
     const id = `flowchart-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     mermaid
       .render(id, scopedDiagram)
@@ -57,24 +65,48 @@ export function FlowchartPanel({
         }
       })
       .catch((e) => setError(String(e)));
-  }, [scopedDiagram]);
+  }, [scopedDiagram, theme]);
 
-  function getSvg(): SVGSVGElement | null {
-    return containerRef.current?.querySelector("svg") ?? null;
+  // Exports are ALWAYS light, regardless of the current UI theme.
+  async function buildLightSvg(): Promise<SVGSVGElement | null> {
+    if (!method) return null;
+    const lightDiagram = generateFlowchart(method, "light").replaceAll(
+      "onFlowchartNodeClick",
+      handlerName
+    );
+    const source = await renderDiagramWithTheme(lightDiagram, "light");
+    return svgFromString(source);
   }
 
   async function exportPng() {
-    const svg = getSvg();
-    if (!svg) return;
     setExportError(null);
+    setExporting(true);
     try {
-      await downloadPng(svg, `${name ?? "flowchart"}-flowchart`);
+      const svg = await buildLightSvg();
+      if (!svg) throw new Error("Could not render the diagram.");
+      await downloadPng(svg, `${name ?? "flowchart"}-flowchart`, "#ffffff");
     } catch (e) {
       setExportError(`PNG export failed: ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
     }
   }
 
-  if (!diagram) {
+  async function exportSvg() {
+    setExportError(null);
+    setExporting(true);
+    try {
+      const svg = await buildLightSvg();
+      if (!svg) throw new Error("Could not render the diagram.");
+      downloadSvg(svg, `${name ?? "flowchart"}-flowchart`);
+    } catch (e) {
+      setExportError(`SVG export failed: ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  if (!method) {
     return (
       <div className="flex h-full items-center justify-center text-body-sm text-text-muted">
         Analyze a method to see its flowchart.
@@ -89,7 +121,12 @@ export function FlowchartPanel({
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
-        <span className="label-caps">Flowchart{name ? ` — ${name}()` : ""}</span>
+        <span className="label-caps">
+          Flowchart{(() => {
+            const suffix = label ?? (name ? `${name}()` : "");
+            return suffix ? ` — ${suffix}` : "";
+          })()}
+        </span>
         <div className="flex items-center gap-2">
           {exportError && (
             <span className="text-code-sm text-error" title={exportError}>
@@ -97,28 +134,25 @@ export function FlowchartPanel({
             </span>
           )}
           <button
-            disabled={!rendered}
+            disabled={!rendered || exporting}
             onClick={exportPng}
             className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary disabled:opacity-40"
-            title="Download flowchart as PNG"
+            title="Download flowchart as PNG (light theme)"
           >
             PNG
           </button>
           <button
-            disabled={!rendered}
-            onClick={() => {
-              const svg = getSvg();
-              if (svg) downloadSvg(svg, `${name ?? "flowchart"}-flowchart`);
-            }}
+            disabled={!rendered || exporting}
+            onClick={exportSvg}
             className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary disabled:opacity-40"
-            title="Download flowchart as SVG"
+            title="Download flowchart as SVG (light theme)"
           >
             SVG
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <PanZoom>
           <div ref={containerRef} />
         </PanZoom>

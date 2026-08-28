@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTheme } from "@/lib/theme";
 
 const links = [
   { href: "/", label: "Editor" },
@@ -12,6 +13,7 @@ const links = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const { theme, toggle } = useTheme();
 
   return (
     <header className="flex h-11 shrink-0 items-center border-b border-panel-border bg-surface-container-lowest px-container-margin">
@@ -36,6 +38,17 @@ export function TopNav() {
           );
         })}
       </nav>
+      <button
+        onClick={toggle}
+        className="ml-auto flex items-center gap-1.5 rounded border border-panel-border px-2.5 py-1 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+        title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+        aria-label="Toggle color theme"
+      >
+        <span aria-hidden="true" suppressHydrationWarning>
+          {theme === "dark" ? "☀" : "☾"}
+        </span>
+        <span suppressHydrationWarning>{theme === "dark" ? "Light" : "Dark"}</span>
+      </button>
     </header>
   );
 }

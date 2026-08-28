@@ -1,5 +1,6 @@
 import { ProgramIR } from "@/lib/ir";
 import { escapeLabel } from "./generate";
+import type { Theme } from "@/lib/theme";
 
 /**
  * Builds a Mermaid call graph for multi-method problems (e.g. a DFS with a
@@ -14,7 +15,11 @@ import { escapeLabel } from "./generate";
  * Clicking an internal node calls the global handler with the method name so
  * the editor can switch to that method's flowchart.
  */
-export function generateCallGraph(ir: ProgramIR, handlerName = "onCallGraphNodeClick"): string | null {
+export function generateCallGraph(
+  ir: ProgramIR,
+  handlerName = "onCallGraphNodeClick",
+  theme: Theme = "dark",
+): string | null {
   const methods = ir.classes.flatMap((c) => c.methods ?? []);
   if (methods.length <= 1) return null;
 
@@ -71,10 +76,17 @@ export function generateCallGraph(ir: ProgramIR, handlerName = "onCallGraphNodeC
   for (const edge of edges) {
     lines.push(`  ${edge.from} --> ${edge.to}`);
   }
-  lines.push(
-    "  classDef internal fill:#10141a,stroke:#38bdf8,stroke-width:1px,color:#dfe2eb",
-    "  classDef external fill:#1c2026,stroke:#3e484f,stroke-width:1px,color:#8b949e,stroke-dasharray:3 3"
-  );
+  const classDefs: Record<Theme, [string, string]> = {
+    dark: [
+      "  classDef internal fill:#10141a,stroke:#38bdf8,stroke-width:1px,color:#dfe2eb",
+      "  classDef external fill:#1c2026,stroke:#3e484f,stroke-width:1px,color:#8b949e,stroke-dasharray:3 3",
+    ],
+    light: [
+      "  classDef internal fill:#ffffff,stroke:#0969da,stroke-width:1px,color:#1f2328",
+      "  classDef external fill:#f6f8fa,stroke:#d0d7de,stroke-width:1px,color:#6e7781,stroke-dasharray:3 3",
+    ],
+  };
+  lines.push(...classDefs[theme]);
 
   return lines.join("\n");
 }

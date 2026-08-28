@@ -76,7 +76,6 @@ lib/
   flowchart/          IR -> Mermaid conversion (multi-color, comment notes)
   diff/               complexity delta comparison
   spaced/             SM-2 spaced repetition scheduler
-  run/                main-class detection + sandboxed Java compile/execute
   export/             PNG/SVG/Markdown/CSV/Anki download helpers
   security/           input validation, sanitization, rate limiting
   db/                 SQLite setup

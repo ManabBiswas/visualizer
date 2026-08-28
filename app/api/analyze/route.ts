@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { ProgramIR } from "@/lib/ir";
 import { parseJava } from "@/lib/parser";
 import { analyzeComplexity } from "@/lib/complexity/analyze";
+import { analyzeBlockComplexity } from "@/lib/complexity/blocks";
 import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 import { generateFlowchart } from "@/lib/flowchart/generate";
 import { generateCallGraph } from "@/lib/flowchart/callGraph";
@@ -85,12 +86,16 @@ export async function POST(req: NextRequest) {
       className: cls.name,
       method,
       complexity: analyzeComplexity(method),
+      blockComplexity: analyzeBlockComplexity(method),
       flowchart: generateFlowchart(method),
     })),
   );
 
   // Only present for multi-method problems; the UI hides the tab otherwise.
+  // Generated in both themes so the client can display either and always
+  // export the light variant.
   const callGraph = generateCallGraph(ir);
+  const callGraphLight = generateCallGraph(ir, "onCallGraphNodeClick", "light");
 
   let savedProblemId: string | null = null;
   let saveWarning: string | null = null;
@@ -163,5 +168,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ results, callGraph, savedProblemId, saveWarning });
+  return NextResponse.json({ results, callGraph, callGraphLight, savedProblemId, saveWarning });
 }

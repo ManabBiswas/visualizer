@@ -1,4 +1,5 @@
 import { MethodIR, StatementNode, CommentTag } from "@/lib/ir";
+import type { Theme } from "@/lib/theme";
 
 type Edge = { from: string; to: string; label?: string; dotted?: boolean };
 type NodeDef = {
@@ -23,7 +24,8 @@ export const FLOWCHART_LEGEND: LegendEntry[] = [
   { label: "q / note / why / complexity", color: "#ffa657", description: "Your tagged comments, attached to the code they annotate" },
 ];
 
-const CLASS_DEFS = `
+const CLASS_DEFS: Record<Theme, string> = {
+  dark: `
 classDef startNode fill:#1c2026,stroke:#8b949e,stroke-width:1px,color:#dfe2eb
 classDef endNode fill:#1c2026,stroke:#238636,stroke-width:1px,color:#dfe2eb
 classDef process fill:#10141a,stroke:#38bdf8,stroke-width:1px,color:#dfe2eb
@@ -37,7 +39,23 @@ classDef noteQ fill:#262a31,stroke:#8ed5ff,stroke-dasharray:4 3,color:#dfe2eb
 classDef noteNote fill:#262a31,stroke:#79c0ff,stroke-dasharray:4 3,color:#dfe2eb
 classDef noteWhy fill:#262a31,stroke:#d2a8ff,stroke-dasharray:4 3,color:#dfe2eb
 classDef noteComplexity fill:#262a31,stroke:#ffa657,stroke-dasharray:4 3,color:#dfe2eb
-`.trim();
+`.trim(),
+  light: `
+classDef startNode fill:#f6f8fa,stroke:#6e7781,stroke-width:1px,color:#1f2328
+classDef endNode fill:#f6f8fa,stroke:#1a7f37,stroke-width:1px,color:#1f2328
+classDef process fill:#ffffff,stroke:#0969da,stroke-width:1px,color:#1f2328
+classDef decision fill:#ffffff,stroke:#bc4c00,stroke-width:1px,color:#1f2328
+classDef loopNode fill:#ffffff,stroke:#8250df,stroke-width:1px,color:#1f2328
+classDef callNode fill:#ffffff,stroke:#0969da,stroke-width:1px,color:#1f2328
+classDef recursion fill:#fff1f0,stroke:#d1242f,stroke-width:2px,color:#1f2328
+classDef returnNode fill:#f6f8fa,stroke:#1a7f37,stroke-width:1px,color:#1f2328
+classDef tryNode fill:#ffffff,stroke:#6e7781,stroke-width:1px,color:#57606a
+classDef noteQ fill:#f6f8fa,stroke:#0969da,stroke-dasharray:4 3,color:#1f2328
+classDef noteNote fill:#f6f8fa,stroke:#0969da,stroke-dasharray:4 3,color:#1f2328
+classDef noteWhy fill:#f6f8fa,stroke:#8250df,stroke-dasharray:4 3,color:#1f2328
+classDef noteComplexity fill:#f6f8fa,stroke:#bc4c00,stroke-dasharray:4 3,color:#1f2328
+`.trim(),
+};
 
 const NOTE_CLASS: Record<CommentTag["tag"], string> = {
   q: "noteQ",
@@ -88,7 +106,7 @@ function nodeEndLine(node: StatementNode): number {
  * handler (registered by the frontend) so clicking a node highlights the
  * corresponding source line in the editor (see DESIGN.md 3.2).
  */
-export function generateFlowchart(method: MethodIR): string {
+export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): string {
   let idCounter = 0;
   const nextId = (): string => {
     idCounter += 1;
@@ -264,7 +282,7 @@ export function generateFlowchart(method: MethodIR): string {
     const arrow = edge.dotted ? "-.->" : edge.label ? `-- ${edge.label} -->` : "-->";
     lines.push(`  ${edge.from} ${arrow} ${edge.to}`);
   }
-  lines.push(CLASS_DEFS.split("\n").map((l) => `  ${l}`).join("\n"));
+  lines.push(CLASS_DEFS[theme].split("\n").map((l) => `  ${l}`).join("\n"));
 
   return lines.join("\n");
 }

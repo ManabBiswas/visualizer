@@ -15,6 +15,7 @@
     "@monaco-editor/react": "^4.6.0",
     "better-sqlite3": "^12.11.1",
     "java-parser": "^3.0.1",
+    "jspdf": "^4.2.1",
     "mermaid": "^11.16.0",
     "monaco-editor": "^0.56.0",
     "next": "16.2.10",
