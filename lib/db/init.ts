@@ -1,25 +1,67 @@
-import Database from "better-sqlite3";
+import Database from "libsql";
 import path from "path";
 
+// Remote (Turso) when configured, local file otherwise. Both use the same
+// better-sqlite3-compatible synchronous API, so no route code changes.
+const TURSO_URL = process.env.TURSO_DATABASE_URL;
 const DB_PATH = path.join(process.cwd(), "codelens.db");
 
 let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
-  db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
+
+  if (TURSO_URL) {
+    // libsql's bundled types lag its runtime: the constructor accepts
+    // `authToken` for remote Turso connections (index.js reads opts.authToken),
+    // but Database.Options was copied from better-sqlite3 and omits it.
+    db = new Database(TURSO_URL, {
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    } as Database.Options);
+  } else {
+    db = new Database(DB_PATH);
+    db.pragma("journal_mode = WAL");
+  }
   db.pragma("foreign_keys = ON");
 
+  migrate(db);
+  return db;
+}
+
+// Schema v2 (multi-user): problems are owned by a GitHub-authenticated user.
+// Exported so tests can run it against throwaway databases.
+export function migrate(db: Database.Database): void {
+  // v1 -> v2: `problems` lacked user_id and carried a global UNIQUE(name)
+  // that SQLite cannot ALTER away, so the table is rebuilt instead. Rows from
+  // the single-user era cannot be attributed to an account and are dropped
+  // (pre-production dev data). The DROP performs an implicit DELETE, which
+  // cascades to analyses/notes/card_states via their ON DELETE CASCADE keys.
+  const problemsColumns = db.prepare("PRAGMA table_info(problems)").all() as { name: string }[];
+  if (problemsColumns.length > 0 && !problemsColumns.some((c) => c.name === "user_id")) {
+    db.exec("DROP TABLE problems");
+  }
+
   db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      github_id TEXT NOT NULL UNIQUE,
+      login TEXT NOT NULL,
+      name TEXT,
+      email TEXT,
+      avatar_url TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS problems (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
       link TEXT,
       topic_tags TEXT NOT NULL DEFAULT '[]',
       difficulty TEXT CHECK(difficulty IN ('Easy','Medium','Hard')),
       source_code TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, name)
     );
 
     CREATE TABLE IF NOT EXISTS analyses (
@@ -57,7 +99,7 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_card_states_due ON card_states(due_date);
   `);
 
-  // Lightweight migrations for databases created before these columns existed.
+  // Lightweight migrations for tables created before these columns existed.
   const analysisColumns = db.prepare("PRAGMA table_info(analyses)").all() as { name: string }[];
   if (!analysisColumns.some((c) => c.name === "method_name")) {
     db.exec("ALTER TABLE analyses ADD COLUMN method_name TEXT");
@@ -66,6 +108,4 @@ export function getDb(): Database.Database {
   if (!noteColumns.some((c) => c.name === "answer")) {
     db.exec("ALTER TABLE notes ADD COLUMN answer TEXT");
   }
-
-  return db;
 }

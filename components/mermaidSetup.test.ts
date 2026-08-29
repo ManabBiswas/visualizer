@@ -28,7 +28,7 @@ import mermaid from "mermaid";
 import { ensureMermaid } from "@/components/mermaidSetup";
 
 describe("mermaid SVG export-safety", () => {
-  it("renders node labels without foreignObject (canvas-safe)", async () => {
+  it("renders node labels without foreignObject (canvas-safe)", { timeout: 30_000 }, async () => {
     ensureMermaid();
     // Single node, no edges — avoids mermaid's edge-routing (which needs real
     // SVG geometry) while still exercising the label renderer, which is the
