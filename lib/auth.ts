@@ -1,5 +1,8 @@
 import NextAuth from "next-auth";
 import GitHub, { type GitHubProfile } from "next-auth/providers/github";
+import { assertRequiredEnv } from "@/lib/security/env";
+
+assertRequiredEnv();
 
 // Narrow what the provider actually sends; the bundled Profile type keeps
 // most fields as `unknown` so they cannot be trusted directly.

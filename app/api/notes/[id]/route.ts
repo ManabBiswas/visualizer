@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { isValidId, stripControlChars } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 
 const MAX_ANSWER_CHARS = 2000;
 
@@ -38,7 +39,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   try {
     db = getDb();
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 503 });
+    return NextResponse.json({ error: redactSecrets((err as Error).message) }, { status: 503 });
   }
 
   // Ownership flows through the note's problem -> user; only the owner's

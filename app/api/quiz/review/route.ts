@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { isValidId } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 import { GRADES, Grade, newCardState, schedule, CardState } from "@/lib/spaced/repetition";
 
 export async function POST(req: NextRequest) {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   try {
     db = getDb();
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 503 });
+    return NextResponse.json({ error: redactSecrets((err as Error).message) }, { status: 503 });
   }
 
   // Ownership flows through the note's problem -> user. A foreign card is

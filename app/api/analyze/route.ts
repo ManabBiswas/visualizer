@@ -8,6 +8,7 @@ import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 import { generateCallGraph } from "@/lib/flowchart/callGraph";
 import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
+import { redactSecrets } from "@/lib/security/env";
 import { validateSource, validateProblemMeta } from "@/lib/security/validate";
 import { isRateLimited, tryAcquireParserSlot, releaseParserSlot } from "@/lib/security/rateLimit";
 
@@ -180,7 +181,7 @@ export async function POST(req: NextRequest) {
       // notes results are still valid and useful, so we return them anyway
       // and surface the save failure as a warning rather than a 500.
       savedProblemId = null;
-      saveWarning = `Analysis succeeded but could not be saved to the log: ${(err as Error).message}`;
+      saveWarning = `Analysis succeeded but could not be saved to the log: ${redactSecrets((err as Error).message)}`;
     }
   }
 

@@ -20,7 +20,8 @@ if (!githubId || !login) {
 const token = await encode({
   token: { name: login, email: null, sub: githubId, githubId, login },
   secret: env.AUTH_SECRET,
-  salt: "codelens-test-salt",
+  // Must match the cookie name Auth.js derives the encryption key from.
+  salt: "authjs.session-token",
 });
 
 // npm start serves from http://localhost:3000; the cookie host-only flag and

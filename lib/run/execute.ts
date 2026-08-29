@@ -18,6 +18,22 @@ export const DEFAULT_RUN_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_BYTES = 1_000_000;
 const MAX_STDIN_BYTES = 1_000_000;
 
+// The spawned JVM runs untrusted user code. It must never inherit the host
+// process environment: secrets like AUTH_SECRET or TURSO_AUTH_TOKEN would be
+// readable via System.getenv(). Build a minimal, secret-free env instead.
+const ENV_ALLOWLIST = ["PATH", "HOME", "USERPROFILE", "JAVA_HOME", "JAVA_TOOL_OPTIONS"];
+
+function sanitizedEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { NODE_ENV: process.env.NODE_ENV };
+  for (const key of ENV_ALLOWLIST) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  // Windows needs SystemRoot for process creation; JAVA_TOOL_OPTIONS and
+  // *_OPTIONS vars could inject flags, so allowlist is kept deliberately small.
+  if (process.platform === "win32" && process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
+  return env;
+}
+
 export type RunResult = {
   ok: boolean;
   stage: "setup" | "compile" | "run";
@@ -41,7 +57,10 @@ function runProcess(
   opts: { timeoutMs: number; stdin?: string; cwd?: string },
 ): Promise<ProcessResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: opts.cwd, shell: false });
+    // shell:false + argument array means nothing user-controlled ever passes
+    // through a shell — combined with the sanitized env there is no path to
+    // secret reads or flag injection from submitted Java code.
+    const child = spawn(command, args, { cwd: opts.cwd, shell: false, env: sanitizedEnv() });
     let stdout = "";
     let stderr = "";
     let settled = false;

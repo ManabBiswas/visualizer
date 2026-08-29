@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { cleanQueryParam, isValidId } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 
 type QuizRow = {
   id: string;
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
       .all(userId) as QuizRow[];
   } catch (err) {
     return NextResponse.json(
-      { cards: [], warning: `Could not read quiz cards: ${(err as Error).message}` },
+      { cards: [], warning: `Could not read quiz cards: ${redactSecrets((err as Error).message)}` },
       { status: 200 },
     );
   }

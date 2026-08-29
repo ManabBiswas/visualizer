@@ -3,6 +3,7 @@ import { runJava } from "@/lib/run/execute";
 import { validateSource, validateStdin } from "@/lib/security/validate";
 import { isRateLimited, tryAcquireRunSlot, releaseRunSlot } from "@/lib/security/rateLimit";
 import { getAuthedUserId } from "@/lib/api/user";
+import { redactSecrets } from "@/lib/security/env";
 
 const MAX_CONCURRENT_RUNS = 2;
 const RATE_LIMIT_PER_MINUTE = 20;
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(
-      { error: `Run failed: ${(err as Error).message}` },
+      { error: `Run failed: ${redactSecrets((err as Error).message)}` },
       { status: 500 },
     );
   } finally {

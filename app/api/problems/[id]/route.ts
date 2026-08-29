@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { isValidId } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const userId = await getAuthedUserId();
@@ -17,7 +18,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     db = getDb();
   } catch (err) {
     return NextResponse.json(
-      { error: `Could not open the problem log: ${(err as Error).message}` },
+      { error: `Could not open the problem log: ${redactSecrets((err as Error).message)}` },
       { status: 503 },
     );
   }

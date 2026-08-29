@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { cleanQueryParam } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 
 export async function GET(req: NextRequest) {
   const userId = await getAuthedUserId();
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
       .all(userId) as any[];
   } catch (err) {
     return NextResponse.json(
-      { problems: [], warning: `Could not read the problem log: ${(err as Error).message}` },
+      { problems: [], warning: `Could not read the problem log: ${redactSecrets((err as Error).message)}` },
       { status: 200 },
     );
   }
