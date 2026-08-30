@@ -8,8 +8,17 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono" });
 
 export const metadata: Metadata = {
-  title: "CodeLens — DSA Prep",
+  title: {
+    default: "CodeLens — DSA Prep",
+    template: "%s",
+  },
   description: "Flowcharts, complexity analysis, and a revision log for placement prep.",
+  openGraph: {
+    title: "CodeLens — Understand your Java solutions before the interviewer asks",
+    description: "Flowcharts, call graphs, Big-O analysis and a spaced-repetition quiz built from your own comments.",
+    type: "website",
+    siteName: "CodeLens",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
