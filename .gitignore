@@ -23,12 +23,13 @@ codelens.db-shm
 # Parser build output
 parser/target/
 
-# Environment variables
+# Environment variables (keep the example template tracked)
 .env
 .env.local
 .env.development
 .env.test
 .env.production
+!.env.example
 
 # Logs and temp files
 *.log

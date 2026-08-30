@@ -41,7 +41,7 @@ CodeLens is a Java DSA analysis and revision tool for interview preparation. Pas
 
 ## Environment variables
 
-Create a `.env.local` (dev) or set them in your host's dashboard (prod):
+Copy `.env.example` to `.env.local` (dev) or set them in your host's dashboard (prod):
 
 | Variable | Required | Purpose |
 |---|---|---|
