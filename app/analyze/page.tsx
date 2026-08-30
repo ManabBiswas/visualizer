@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { CodeEditor, type CodeEditorHandle } from "@/components/CodeEditor";
 import { MetadataBar, ProblemMeta } from "@/components/MetadataBar";
 import { FlowchartPanel } from "@/components/FlowchartPanel";
@@ -53,6 +54,10 @@ const TAB_LABELS: Record<RightTab, string> = {
   notes: "Notes",
 };
 
+// Code execution is opt-in per deployment (it shells out to a local JVM,
+// which isn't available on serverless hosts). Not a secret — safe to inline.
+const RUN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_RUN === "1";
+
 function EditorPage() {
   const searchParams = useSearchParams();
   const problemId = searchParams.get("problem");
@@ -70,7 +75,16 @@ function EditorPage() {
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const editorRef = useRef<CodeEditorHandle | null>(null);
+
+  // Clear a stale save warning when navigating to a different problem
+  // (render-phase state adjustment — React's recommended pattern).
+  const [prevProblemId, setPrevProblemId] = useState(problemId);
+  if (prevProblemId !== problemId) {
+    setPrevProblemId(problemId);
+    setSaveWarning(null);
+  }
 
   useEffect(() => {
     if (!problemId || !isValidId(problemId)) return;
@@ -114,6 +128,7 @@ function EditorPage() {
       setCallGraphLight(data.callGraphLight ?? null);
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
+      setSaveWarning(data.saveWarning ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -161,17 +176,19 @@ function EditorPage() {
               <span className="font-mono text-code-sm text-text-muted">Solution.java</span>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setConsoleOpen((o) => !o)}
-                className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
-                  consoleOpen
-                    ? "border-primary text-primary"
-                    : "border-panel-border text-on-surface-variant hover:text-on-surface"
-                }`}
-                title="Toggle the run console (execute your code with stdin input)"
-              >
-                {consoleOpen ? "Console ▾" : "Console ▸"}
-              </button>
+              {RUN_ENABLED && (
+                <button
+                  onClick={() => setConsoleOpen((o) => !o)}
+                  className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
+                    consoleOpen
+                      ? "border-primary text-primary"
+                      : "border-panel-border text-on-surface-variant hover:text-on-surface"
+                  }`}
+                  title="Toggle the run console (execute your code with stdin input)"
+                >
+                  {consoleOpen ? "Console ▾" : "Console ▸"}
+                </button>
+              )}
               <button
                 onClick={downloadReport}
                 disabled={!current || reporting}
@@ -198,7 +215,20 @@ function EditorPage() {
               }}
             />
           </div>
-          {consoleOpen && <RunConsole code={code} />}
+          {consoleOpen && RUN_ENABLED && <RunConsole code={code} />}
+          {saveWarning && (
+            <div className="flex shrink-0 items-center gap-3 border-t border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-on-surface-variant">
+              <span className="min-w-0 flex-1">{saveWarning}</span>
+              {saveWarning.includes("Sign in") && (
+                <button
+                  onClick={() => signIn("github", { callbackUrl: "/analyze" })}
+                  className="shrink-0 rounded bg-primary-container px-3 py-1 text-body-sm font-medium text-on-primary-container hover:opacity-90"
+                >
+                  Sign in with GitHub
+                </button>
+              )}
+            </div>
+          )}
           {(error || reportError) && (
             <div className="shrink-0 border-t border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
               {error ?? reportError}
