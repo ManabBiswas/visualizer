@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: ["libsql"],
 };
 
 export default nextConfig;

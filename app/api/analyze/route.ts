@@ -7,6 +7,8 @@ import { analyzeBlockComplexity } from "@/lib/complexity/blocks";
 import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 import { generateCallGraph } from "@/lib/flowchart/callGraph";
 import { getDb } from "@/lib/db/init";
+import { getAuthedUserId } from "@/lib/api/user";
+import { redactSecrets } from "@/lib/security/env";
 import { validateSource, validateProblemMeta } from "@/lib/security/validate";
 import { isRateLimited, tryAcquireParserSlot, releaseParserSlot } from "@/lib/security/rateLimit";
 
@@ -98,13 +100,29 @@ export async function POST(req: NextRequest) {
   let savedProblemId: string | null = null;
   let saveWarning: string | null = null;
   if (problem) {
+    // Saving is user-scoped: the problem log is private per account, so an
+    // anonymous request cannot persist anything.
+    const userId = await getAuthedUserId();
+    if (!userId) {
+      return NextResponse.json(
+        {
+          results,
+          callGraph,
+          callGraphLight,
+          savedProblemId: null,
+          saveWarning:
+            "Sign in with GitHub to save problems to your log. The analysis below is complete but wasn't saved.",
+        },
+        { status: 200 },
+      );
+    }
     try {
       const db = getDb();
-      // Upsert by problem name: re-analyzing the same problem refreshes the row
-      // instead of duplicating it in the log.
+      // Upsert by problem name within this user's log: re-analyzing refreshes
+      // the row instead of duplicating it, and never touches other users' rows.
       const existing = db
-        .prepare("SELECT id FROM problems WHERE name = ?")
-        .get(problem.name) as { id: string } | undefined;
+        .prepare("SELECT id FROM problems WHERE name = ? AND user_id = ?")
+        .get(problem.name, userId) as { id: string } | undefined;
 
       if (existing) {
         savedProblemId = existing.id;
@@ -122,9 +140,10 @@ export async function POST(req: NextRequest) {
       } else {
         savedProblemId = randomUUID();
         db.prepare(
-          `INSERT INTO problems (id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO problems (id, user_id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           savedProblemId,
+          userId,
           problem.name,
           problem.link,
           JSON.stringify(problem.topicTags),
@@ -162,7 +181,7 @@ export async function POST(req: NextRequest) {
       // notes results are still valid and useful, so we return them anyway
       // and surface the save failure as a warning rather than a 500.
       savedProblemId = null;
-      saveWarning = `Analysis succeeded but could not be saved to the log: ${(err as Error).message}`;
+      saveWarning = `Analysis succeeded but could not be saved to the log: ${redactSecrets((err as Error).message)}`;
     }
   }
 

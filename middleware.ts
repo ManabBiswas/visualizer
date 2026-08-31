@@ -24,6 +24,11 @@ export function middleware(_req: NextRequest) {
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Isolates the window from cross-origin openers (OAuth popup hardening).
+  // X-XSS-Protection is explicitly disabled: the legacy auditor is itself
+  // exploitable; modern browsers ignore it, older ones are safer without it.
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.headers.set("X-XSS-Protection", "0");
   return res;
 }
 

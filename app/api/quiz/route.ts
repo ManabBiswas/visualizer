@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
+import { getAuthedUserId } from "@/lib/api/user";
 import { cleanQueryParam, isValidId } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 
 type QuizRow = {
   id: string;
@@ -18,6 +20,11 @@ type QuizRow = {
 };
 
 export async function GET(req: NextRequest) {
+  const userId = await getAuthedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Sign in to view your quiz cards." }, { status: 401 });
+  }
+
   const topic = cleanQueryParam(req.nextUrl.searchParams.get("topic"));
   const problemId = cleanQueryParam(req.nextUrl.searchParams.get("problem"));
   const dueOnly = req.nextUrl.searchParams.get("due") === "1";
@@ -37,13 +44,13 @@ export async function GET(req: NextRequest) {
          FROM notes n
          JOIN problems p ON p.id = n.problem_id
          LEFT JOIN card_states cs ON cs.note_id = n.id
-         WHERE n.tag_type = 'q'
+         WHERE n.tag_type = 'q' AND p.user_id = ?
          ORDER BY CASE WHEN cs.due_date IS NULL THEN 0 ELSE 1 END, cs.due_date ASC, n.created_at ASC`,
       )
-      .all() as QuizRow[];
+      .all(userId) as QuizRow[];
   } catch (err) {
     return NextResponse.json(
-      { cards: [], warning: `Could not read quiz cards: ${(err as Error).message}` },
+      { cards: [], warning: `Could not read quiz cards: ${redactSecrets((err as Error).message)}` },
       { status: 200 },
     );
   }

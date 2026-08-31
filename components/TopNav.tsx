@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { useTheme } from "@/lib/theme";
 
 const links = [
@@ -15,6 +16,7 @@ const links = [
 export function TopNav() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
+  const { data: session, status } = useSession();
 
   return (
     <header className="flex h-11 shrink-0 items-center border-b border-panel-border bg-surface-container-lowest px-container-margin">
@@ -53,9 +55,43 @@ export function TopNav() {
         <span aria-hidden="true">★</span>
         Star the repo
       </a>
+      <div className="ml-2 flex items-center gap-1.5">
+        {status === "loading" ? (
+          <span className="text-body-sm text-text-muted">…</span>
+        ) : session?.user ? (
+          <>
+            {session.user.avatarUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- GitHub avatar, fixed remote origin
+              <img
+                src={session.user.avatarUrl}
+                alt=""
+                className="h-6 w-6 rounded-full border border-panel-border"
+              />
+            )}
+            <span className="max-w-24 truncate text-body-sm text-on-surface-variant" title={session.user.login}>
+              {session.user.login}
+            </span>
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="rounded border border-panel-border px-2 py-1 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+              title="Sign out"
+            >
+              Sign out
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => signIn("github", { callbackUrl: "/analyze" })}
+            className="rounded bg-primary-container px-3 py-1 text-body-sm font-semibold text-on-primary-container hover:opacity-90"
+            title="Sign in with GitHub"
+          >
+            Sign in
+          </button>
+        )}
+      </div>
       <button
         onClick={toggle}
-        className="ml-2 flex items-center gap-1.5 rounded border border-panel-border px-2.5 py-1 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+        className="flex items-center gap-1.5 rounded border border-panel-border px-2.5 py-1 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
         title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
         aria-label="Toggle color theme"
       >

@@ -2,10 +2,12 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
 import { Grade } from "@/lib/spaced/repetition";
 import { cardsToAnkiTxt } from "@/lib/export/anki";
 import { downloadText } from "@/lib/export/download";
+import { SignInPrompt } from "@/components/SignInPrompt";
 
 type QuizCard = {
   id: string;
@@ -28,6 +30,7 @@ type QuizCard = {
 function QuizPage() {
   const searchParams = useSearchParams();
   const problemFilter = searchParams.get("problem");
+  const { status } = useSession();
 
   const [allCards, setAllCards] = useState<QuizCard[]>([]);
   const [queue, setQueue] = useState<QuizCard[]>([]);
@@ -41,6 +44,9 @@ function QuizPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const loadCards = useCallback(() => {
+    // Quiz cards are per-account; skip the doomed 401 request when
+    // signed out — the SignInPrompt covers that case instead.
+    if (status !== "authenticated") return;
     const params = new URLSearchParams();
     if (topicFilter) params.set("topic", topicFilter);
     if (problemFilter) params.set("problem", problemFilter);
@@ -54,7 +60,7 @@ function QuizPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [topicFilter, problemFilter, dueOnly]);
+  }, [topicFilter, problemFilter, dueOnly, status]);
 
   useEffect(() => {
     loadCards();
@@ -181,7 +187,13 @@ function QuizPage() {
 
       {notice && <div className="mb-3 rounded border border-panel-border bg-surface-container px-3 py-2 text-body-sm text-on-surface">{notice}</div>}
 
-      {loading ? (
+      {status === "unauthenticated" ? (
+        <SignInPrompt
+          title="Sign in to review your quiz cards"
+          message="Your spaced-repetition deck is built from the // q: comments in your solutions. Sign in to keep reviewing where you left off."
+          callbackUrl={problemFilter ? `/quiz?problem=${problemFilter}` : "/quiz"}
+        />
+      ) : loading ? (
         <p className="text-body-sm text-text-muted">Loading…</p>
       ) : !current ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-body-sm text-text-muted">

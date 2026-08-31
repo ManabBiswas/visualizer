@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/init";
+import { getAuthedUserId } from "@/lib/api/user";
 import { cleanQueryParam } from "@/lib/security/validate";
+import { redactSecrets } from "@/lib/security/env";
 
 export async function GET(req: NextRequest) {
+  const userId = await getAuthedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Sign in to view your problem log." }, { status: 401 });
+  }
+
   const topic = cleanQueryParam(req.nextUrl.searchParams.get("topic"));
   const difficulty = cleanQueryParam(req.nextUrl.searchParams.get("difficulty"));
 
@@ -22,15 +29,13 @@ export async function GET(req: NextRequest) {
                   ROW_NUMBER() OVER (PARTITION BY problem_id ORDER BY created_at DESC, rowid DESC) as rn
            FROM analyses
          ) la ON la.problem_id = p.id AND la.rn = 1
+         WHERE p.user_id = ?
          ORDER BY p.created_at DESC`,
       )
-      .all() as any[];
+      .all(userId) as any[];
   } catch (err) {
-    // Same read-only-filesystem concern as /api/analyze — see DEPLOYMENT.md.
-    // Return an empty log with a warning rather than a 500, so the /log page
-    // can still render (with its existing empty state) instead of crashing.
     return NextResponse.json(
-      { problems: [], warning: `Could not read the problem log: ${(err as Error).message}` },
+      { problems: [], warning: `Could not read the problem log: ${redactSecrets((err as Error).message)}` },
       { status: 200 },
     );
   }

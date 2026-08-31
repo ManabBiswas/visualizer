@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
 import { logToMarkdown, logToCsv, LogExportRow } from "@/lib/export/log";
 import { downloadText } from "@/lib/export/download";
 import { isSafeHttpUrl } from "@/lib/security/validate";
+import { SignInPrompt } from "@/components/SignInPrompt";
 
 type ProblemRow = {
   id: string;
@@ -35,12 +37,16 @@ function parseTopics(raw: string | null): string[] {
 
 export default function LogPage() {
   const router = useRouter();
+  const { status } = useSession();
   const [problems, setProblems] = useState<ProblemRow[]>([]);
   const [topicFilter, setTopicFilter] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // The log is per-account; don't fire a doomed 401 request for
+    // signed-out visitors — the SignInPrompt handles that case instead.
+    if (status !== "authenticated") return;
     let cancelled = false;
     const params = new URLSearchParams();
     if (topicFilter) params.set("topic", topicFilter);
@@ -59,7 +65,7 @@ export default function LogPage() {
     return () => {
       cancelled = true;
     };
-  }, [topicFilter, difficultyFilter]);
+  }, [topicFilter, difficultyFilter, status]);
 
   function exportRows(): LogExportRow[] {
     return problems.map((p) => ({
@@ -128,7 +134,13 @@ export default function LogPage() {
         </div>
       </div>
 
-      {loading ? (
+      {status === "unauthenticated" ? (
+        <SignInPrompt
+          title="Sign in to see your problem log"
+          message="Your revision log is private to your account. Sign in to browse every problem you've analyzed, with filters and Markdown/CSV export."
+          callbackUrl="/log"
+        />
+      ) : loading ? (
         <p className="text-body-sm text-text-muted">Loading…</p>
       ) : problems.length === 0 ? (
         <div className="flex flex-1 items-center justify-center text-body-sm text-text-muted">

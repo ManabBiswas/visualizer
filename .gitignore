@@ -1,9 +1,51 @@
+# Dependencies
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Next.js build output
 .next/
+out/
+dist/
+build/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Local database
 codelens.db
 codelens.db-journal
 codelens.db-wal
 codelens.db-shm
+
+# Parser build output
 parser/target/
-.env*.local
+
+# Environment variables (keep the example template tracked)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+
+# Coverage
+coverage/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Project
 docs/
+opencode.json
