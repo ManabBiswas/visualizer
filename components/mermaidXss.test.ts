@@ -26,7 +26,8 @@ beforeAll(() => {
 
 import mermaid from "mermaid";
 import { ensureMermaid } from "@/components/mermaidSetup";
-import { generateFlowchart } from "@/lib/flowchart/generate";
+import { generateFlowchart, generateFlowchartWithTooltips } from "@/lib/flowchart/generate";
+import { attachSvgTooltips } from "@/lib/flowchart/tooltips";
 import type { MethodIR, CommentTag, StatementNode } from "@/lib/ir";
 
 function methodWith(body: StatementNode[], comments: CommentTag[] = []): MethodIR {
@@ -86,5 +87,67 @@ describe("mermaid XSS safety with hostile user code", () => {
     // The hostile text must still be present but as encoded text, i.e. the
     // payload did not get dropped silently — it is shown harmlessly.
     expect(svg.toLowerCase()).toContain("javascript");
+  });
+
+  it("emits tooltips as SVG <title> and renders them safely", { timeout: 60_000 }, async () => {
+    ensureMermaid();
+    const fullCondition = "aVeryLongConditionExpression > someOtherValue && yetAnotherTerm != 42";
+    const { diagram, tooltips } = generateFlowchartWithTooltips(
+      methodWith([
+        {
+          type: "loop",
+          kind: "while",
+          line: 2,
+          endLine: 4,
+          boundType: "input-dependent",
+          condition: fullCondition,
+          body: [{ type: "statement", line: 3, text: 'String s = "a<b>";' }],
+        },
+        { type: "return", line: 5, value: "0" },
+      ])
+    );
+
+    // Node labels are truncated, but tooltips carry the full text.
+    expect(diagram).not.toContain("title ");
+    expect(tooltips.size).toBeGreaterThan(0);
+    // The full untruncated condition is in the side table, not the diagram.
+    expect([...tooltips.values()].join("\n")).toContain(fullCondition);
+    // Truncation marker never appears inside tooltips.
+    expect([...tooltips.values()].join("\n")).not.toContain("…");
+
+    // Inject into a hand-built SVG matching mermaid's node group structure
+    // (happy-dom cannot run mermaid's edge-label geometry for edge-bearing
+    // diagrams — see mermaidSetup.test.ts note). This verifies the DOM
+    // injection contract exactly as FlowchartPanel uses it.
+    const hostile = '<img src=x onerror=alert(1)> "<script>" ';
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    const mkNode = (id: string) => {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("class", "node");
+      g.setAttribute("id", `flowchart-${id}-17`);
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      g.appendChild(rect);
+      svg.appendChild(g);
+      return g;
+    };
+    const tooltipsWithHostile = new Map(tooltips);
+    tooltipsWithHostile.set("hostile", hostile);
+    // One DOM group per tooltip id (as mermaid would emit) + one orphan.
+    for (const id of tooltipsWithHostile.keys()) mkNode(id);
+    mkNode("orphan"); // no tooltip for this one — must be left untouched
+
+    attachSvgTooltips(svg, tooltipsWithHostile);
+
+    const titleEls = [...svg.querySelectorAll("g.node > title")];
+    expect(titleEls.length).toBe(tooltipsWithHostile.size); // orphan got nothing
+    for (const t of titleEls) {
+      expect(t.outerHTML).not.toMatch(/<img/);
+      expect(t.outerHTML).not.toMatch(/<script/);
+      expect(t.outerHTML).not.toMatch(/\son\w+\s*=\s*"/);
+    }
+    // The hostile text exists as inert textContent (last group = hostile).
+    const groups = [...svg.querySelectorAll("g.node")];
+    const hostileGroup = groups.find((g) => g.querySelector("title")?.textContent.includes("<img src=x"));
+    expect(hostileGroup).toBeTruthy();
   });
 });

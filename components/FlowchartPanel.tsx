@@ -4,7 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import mermaid from "mermaid";
 import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
 import { PanZoom } from "./PanZoom";
-import { generateFlowchart, FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
+import { generateFlowchartWithTooltips, FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
+import { attachSvgTooltips, highlightNode } from "@/lib/flowchart/tooltips";
 import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import type { MethodIR } from "@/lib/ir";
@@ -14,11 +15,18 @@ export function FlowchartPanel({
   onNodeHover,
   showLegend = true,
   label,
+  activeLine,
 }: {
   method: MethodIR | null;
   onNodeHover: (line: number | null) => void;
   showLegend?: boolean;
   label?: string;
+  /**
+   * Source line the editor cursor is parked on. When the line maps to a
+   * flowchart node, that node gets a `cl-active` highlight. Pass `null`
+   * (or omit) to clear. Lines that don't map to a node are ignored.
+   */
+  activeLine?: number | null;
 }) {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,10 +46,19 @@ export function FlowchartPanel({
   );
 
   // Generate the diagram for the current UI theme so it re-skins with the app.
-  const scopedDiagram = useMemo(() => {
+  // Tooltips ride along in a side table and are injected post-render.
+  const scoped = useMemo(() => {
     if (!method) return null;
-    return generateFlowchart(method, theme).replaceAll("onFlowchartNodeClick", handlerName);
-  }, [method, theme, handlerName]);
+    return generateFlowchartWithTooltips(method, theme);
+  }, [method, theme]);
+  const scopedDiagram = useMemo(
+    () => scoped?.diagram.replaceAll("onFlowchartNodeClick", handlerName) ?? null,
+    [scoped, handlerName]
+  );
+  const activeNodeId = useMemo(
+    () => (scoped && activeLine != null ? scoped.nodeByLine.get(activeLine) ?? null : null),
+    [scoped, activeLine]
+  );
 
   useEffect(() => {
     (window as any)[handlerName] = (line: string) => onNodeHover(Number(line));
@@ -61,16 +78,30 @@ export function FlowchartPanel({
       .then(({ svg }) => {
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
+          // Native hover tooltips with the full untruncated node text.
+          const svgEl = containerRef.current.querySelector("svg");
+          if (svgEl) {
+            attachSvgTooltips(svgEl as SVGSVGElement, scoped?.tooltips ?? new Map());
+            highlightNode(svgEl as SVGSVGElement, activeNodeId);
+          }
           setRendered(true);
         }
       })
       .catch((e) => setError(String(e)));
-  }, [scopedDiagram, theme]);
+  }, [scopedDiagram, scoped, theme, activeNodeId]);
+
+  // Re-apply the active highlight when the editor cursor moves to a different
+  // line that maps to a different node (mermaid didn't re-render — cheap).
+  useEffect(() => {
+    if (!rendered) return;
+    const svgEl = containerRef.current?.querySelector("svg");
+    if (svgEl) highlightNode(svgEl as SVGSVGElement, activeNodeId);
+  }, [activeNodeId, rendered]);
 
   // Exports are ALWAYS light, regardless of the current UI theme.
   async function buildLightSvg(): Promise<SVGSVGElement | null> {
     if (!method) return null;
-    const lightDiagram = generateFlowchart(method, "light").replaceAll(
+    const lightDiagram = generateFlowchartWithTooltips(method, "light").diagram.replaceAll(
       "onFlowchartNodeClick",
       handlerName
     );
@@ -154,7 +185,7 @@ export function FlowchartPanel({
 
       <div className="min-h-0 flex-1 overflow-hidden">
         <PanZoom>
-          <div ref={containerRef} />
+          <div ref={containerRef} className="cl-diagram" />
         </PanZoom>
       </div>
 

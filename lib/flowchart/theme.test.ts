@@ -78,12 +78,12 @@ describe("theme-aware call graph generation", () => {
   });
 
   it("emits dark class definitions by default", () => {
-    const out = generateCallGraph(program())!;
+    const out = generateCallGraph(program())!.diagram;
     expect(out).toContain("classDef internal fill:#10141a,stroke:#38bdf8");
   });
 
   it("emits light class definitions for theme=light", () => {
-    const out = generateCallGraph(program(), "onCallGraphNodeClick", "light")!;
+    const out = generateCallGraph(program(), "onCallGraphNodeClick", "light")!.diagram;
     expect(out).toContain("classDef internal fill:#ffffff,stroke:#0969da");
     expect(out).not.toContain("fill:#10141a");
   });

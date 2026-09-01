@@ -93,9 +93,13 @@ export async function POST(req: NextRequest) {
 
   // Only present for multi-method problems; the UI hides the tab otherwise.
   // Generated in both themes so the client can display either and always
-  // export the light variant.
-  const callGraph = generateCallGraph(ir);
-  const callGraphLight = generateCallGraph(ir, "onCallGraphNodeClick", "light");
+  // export the light variant. Tooltips (signature + time/space) ride along
+  // in a side table — the same injection pipeline the flowchart uses.
+  const callGraphResult = generateCallGraph(ir);
+  const callGraphLightResult = generateCallGraph(ir, "onCallGraphNodeClick", "light");
+  const callGraph = callGraphResult?.diagram ?? null;
+  const callGraphLight = callGraphLightResult?.diagram ?? null;
+  const callGraphTooltips = callGraphResult?.tooltips ? Object.fromEntries(callGraphResult.tooltips) : null;
 
   let savedProblemId: string | null = null;
   let saveWarning: string | null = null;
@@ -185,5 +189,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ results, callGraph, callGraphLight, savedProblemId, saveWarning });
+  return NextResponse.json({
+    results,
+    callGraph,
+    callGraphLight,
+    callGraphTooltips,
+    savedProblemId,
+    saveWarning,
+  });
 }

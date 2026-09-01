@@ -189,6 +189,44 @@
   }
 }
 
+/* Hover glow for mermaid diagram nodes (flowchart + call graph). Applied
+   via .cl-diagram on the container so exports and other SVGs are unaffected.
+   pointer-events on the shape elements lets CSS :hover reach them. */
+.cl-diagram svg .node rect,
+.cl-diagram svg .node circle,
+.cl-diagram svg .node polygon,
+.cl-diagram svg .node path {
+  pointer-events: all;
+  transition: filter 120ms ease, stroke-width 120ms ease;
+}
+
+.cl-diagram svg .node:hover rect,
+.cl-diagram svg .node:hover circle,
+.cl-diagram svg .node:hover polygon,
+.cl-diagram svg .node:hover path {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--color-primary) 55%, transparent));
+  stroke: var(--color-primary);
+  stroke-width: 2px;
+}
+
+/* Editor-cursor highlight: pulses the flowchart node whose line the editor
+   cursor is parked on. The cl-active class is toggled imperatively by
+   FlowchartPanel via lib/flowchart/tooltips.highlightNode. */
+.cl-diagram svg g.node.cl-active rect,
+.cl-diagram svg g.node.cl-active circle,
+.cl-diagram svg g.node.cl-active polygon,
+.cl-diagram svg g.node.cl-active path {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--color-primary) 80%, transparent));
+  stroke: var(--color-primary);
+  stroke-width: 2.5px;
+  animation: cl-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cl-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-primary) 60%, transparent)); }
+  50%      { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--color-primary) 90%, transparent)); }
+}
+
 /* In Tailwind v4, custom component classes use @utility instead of @layer components */
 @utility panel {
   @apply bg-surface-container-low border border-panel-border;

@@ -67,6 +67,9 @@ function EditorPage() {
   const [results, setResults] = useState<AnalyzeResult[]>([]);
   const [callGraph, setCallGraph] = useState<string | null>(null);
   const [callGraphLight, setCallGraphLight] = useState<string | null>(null);
+  // nodeId -> tooltip text, returned by the server. Re-injected as SVG
+  // <title> elements by CallGraphPanel after rendering.
+  const [callGraphTooltips, setCallGraphTooltips] = useState<Record<string, string> | null>(null);
   const [activeMethod, setActiveMethod] = useState(0);
   const [tab, setTab] = useState<RightTab>("flowchart");
   const [loading, setLoading] = useState(false);
@@ -76,6 +79,9 @@ function EditorPage() {
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  // Source line the editor cursor is parked on. Drives the "pulsing node"
+  // highlight on the flowchart (the bidirectional code↔diagram link).
+  const [activeLine, setActiveLine] = useState<number | null>(null);
   const editorRef = useRef<CodeEditorHandle | null>(null);
 
   // Clear a stale save warning when navigating to a different problem
@@ -107,6 +113,7 @@ function EditorPage() {
     editorRef.current?.revealLineInCenter(line);
     editorRef.current?.setPosition({ lineNumber: line, column: 1 });
     editorRef.current?.focus();
+    setActiveLine(line);
   }
 
   async function analyze() {
@@ -126,6 +133,7 @@ function EditorPage() {
       setResults(data.results);
       setCallGraph(data.callGraph ?? null);
       setCallGraphLight(data.callGraphLight ?? null);
+      setCallGraphTooltips(data.callGraphTooltips ?? null);
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
       setSaveWarning(data.saveWarning ?? null);
@@ -213,6 +221,7 @@ function EditorPage() {
               onMount={(editor) => {
                 editorRef.current = editor;
               }}
+              onCursorChange={setActiveLine}
             />
           </div>
           {consoleOpen && RUN_ENABLED && <RunConsole code={code} />}
@@ -280,6 +289,7 @@ function EditorPage() {
               <FlowchartPanel
                 method={current?.method ?? null}
                 onNodeHover={(line) => line && jumpToLine(line)}
+                activeLine={activeLine}
               />
             )}
             {tab === "blocks" && (
@@ -293,6 +303,7 @@ function EditorPage() {
               <CallGraphPanel
                 diagram={callGraph}
                 diagramLight={callGraphLight}
+                tooltips={callGraphTooltips}
                 name={meta.name || "problem"}
                 onMethodClick={(methodName) => {
                   const idx = results.findIndex((r) => r.method.name === methodName);
