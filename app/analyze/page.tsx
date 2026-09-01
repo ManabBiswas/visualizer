@@ -12,6 +12,8 @@ import { WalkthroughPanel } from "@/components/WalkthroughPanel";
 import { RunConsole } from "@/components/RunConsole";
 import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
+import { SamplePicker } from "@/components/SamplePicker";
+import { SAMPLES, findSample, type Sample } from "@/data/samples";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
 import { CommentTag, MethodIR } from "@/lib/ir";
@@ -61,12 +63,16 @@ const RUN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_RUN === "1";
 function EditorPage() {
   const searchParams = useSearchParams();
   const problemId = searchParams.get("problem");
+  const sampleId = searchParams.get("sample");
 
   const [code, setCode] = useState(EXAMPLE);
   const [meta, setMeta] = useState<ProblemMeta>({ name: "", link: "", topicTags: [], difficulty: "" });
   const [results, setResults] = useState<AnalyzeResult[]>([]);
   const [callGraph, setCallGraph] = useState<string | null>(null);
   const [callGraphLight, setCallGraphLight] = useState<string | null>(null);
+  // nodeId -> tooltip text, returned by the server. Re-injected as SVG
+  // <title> elements by CallGraphPanel after rendering.
+  const [callGraphTooltips, setCallGraphTooltips] = useState<Record<string, string> | null>(null);
   const [activeMethod, setActiveMethod] = useState(0);
   const [tab, setTab] = useState<RightTab>("flowchart");
   const [loading, setLoading] = useState(false);
@@ -76,6 +82,12 @@ function EditorPage() {
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  // Source line the editor cursor is parked on. Drives the "pulsing node"
+  // highlight on the flowchart (the bidirectional code↔diagram link).
+  const [activeLine, setActiveLine] = useState<number | null>(null);
+  // Sample picker visibility. Opens by default on a fresh visit (cold start),
+  // stays closed when deep-linking (?sample=) or editing a saved problem.
+  const [sampleOpen, setSampleOpen] = useState(true);
   const editorRef = useRef<CodeEditorHandle | null>(null);
 
   // Clear a stale save warning when navigating to a different problem
@@ -85,6 +97,23 @@ function EditorPage() {
     setPrevProblemId(problemId);
     setSaveWarning(null);
   }
+
+  // Deep link: /analyze?sample=two-sum loads a curated sample and analyzes
+  // it immediately — the marketing-site "Try a sample" CTA target. Deferred
+  // via a macrotask so the state updates happen outside the effect's
+  // synchronous path (React compiler-friendly).
+  const appliedSampleRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sampleId || appliedSampleRef.current === sampleId) return;
+    appliedSampleRef.current = sampleId;
+    const t = setTimeout(() => {
+      const sample = findSample(sampleId);
+      if (sample) loadSample(sample);
+      else setError(`Unknown sample: ${sampleId}`);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sampleId]);
 
   useEffect(() => {
     if (!problemId || !isValidId(problemId)) return;
@@ -107,9 +136,10 @@ function EditorPage() {
     editorRef.current?.revealLineInCenter(line);
     editorRef.current?.setPosition({ lineNumber: line, column: 1 });
     editorRef.current?.focus();
+    setActiveLine(line);
   }
 
-  async function analyze() {
+  async function analyze(source: string = code) {
     setLoading(true);
     setError(null);
     try {
@@ -117,7 +147,7 @@ function EditorPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source: code,
+          source,
           problem: meta.name ? meta : undefined,
         }),
       });
@@ -126,6 +156,7 @@ function EditorPage() {
       setResults(data.results);
       setCallGraph(data.callGraph ?? null);
       setCallGraphLight(data.callGraphLight ?? null);
+      setCallGraphTooltips(data.callGraphTooltips ?? null);
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
       setSaveWarning(data.saveWarning ?? null);
@@ -134,6 +165,26 @@ function EditorPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  /** Load one of the curated samples: fill editor + meta, then analyze it. */
+  function loadSample(sample: Sample) {
+    setCode(sample.source);
+    setMeta({
+      name: sample.name,
+      link: sample.link,
+      topicTags: [...sample.topicTags],
+      difficulty: sample.difficulty,
+    });
+    setResults([]);
+    setCallGraph(null);
+    setCallGraphLight(null);
+    setCallGraphTooltips(null);
+    setSavedProblemId(null);
+    setSaveWarning(null);
+    setError(null);
+    setSampleOpen(false);
+    void analyze(sample.source);
   }
 
   const current = results[activeMethod];
@@ -176,6 +227,17 @@ function EditorPage() {
               <span className="font-mono text-code-sm text-text-muted">Solution.java</span>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSampleOpen((o) => !o)}
+                className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
+                  sampleOpen
+                    ? "border-primary text-primary"
+                    : "border-panel-border text-on-surface-variant hover:text-on-surface"
+                }`}
+                title="Curated samples with rich tagged comments — one click to analyze"
+              >
+                {sampleOpen ? "Samples ▾" : "Try a sample ▸"}
+              </button>
               {RUN_ENABLED && (
                 <button
                   onClick={() => setConsoleOpen((o) => !o)}
@@ -198,7 +260,7 @@ function EditorPage() {
                 {reporting ? "Building…" : "PDF Report"}
               </button>
               <button
-                onClick={analyze}
+                onClick={() => void analyze()}
                 disabled={loading}
                 className="rounded bg-primary-container px-4 py-1.5 text-body-sm font-semibold text-on-primary-container hover:opacity-90 disabled:opacity-50"
               >
@@ -206,6 +268,11 @@ function EditorPage() {
               </button>
             </div>
           </div>
+          {sampleOpen && (
+            <div className="shrink-0 border-b border-panel-border bg-surface-container-lowest">
+              <SamplePicker samples={SAMPLES} onSelect={loadSample} />
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-hidden bg-editor-bg">
             <CodeEditor
               value={code}
@@ -213,6 +280,7 @@ function EditorPage() {
               onMount={(editor) => {
                 editorRef.current = editor;
               }}
+              onCursorChange={setActiveLine}
             />
           </div>
           {consoleOpen && RUN_ENABLED && <RunConsole code={code} />}
@@ -280,6 +348,7 @@ function EditorPage() {
               <FlowchartPanel
                 method={current?.method ?? null}
                 onNodeHover={(line) => line && jumpToLine(line)}
+                activeLine={activeLine}
               />
             )}
             {tab === "blocks" && (
@@ -293,6 +362,7 @@ function EditorPage() {
               <CallGraphPanel
                 diagram={callGraph}
                 diagramLight={callGraphLight}
+                tooltips={callGraphTooltips}
                 name={meta.name || "problem"}
                 onMethodClick={(methodName) => {
                   const idx = results.findIndex((r) => r.method.name === methodName);

@@ -14,6 +14,30 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
   // Collapsed by default: metadata is optional, and the editor should own the
   // screen. Expanding reveals the save-to-log fields.
   const [open, setOpen] = useState(false);
+  // LeetCode URL import state: null = idle, "loading" = fetching,
+  // { found: false } = told the user to fall back to manual entry.
+  const [importState, setImportState] = useState<"idle" | "loading" | "fail">("idle");
+
+  async function importFromLeetCode(url: string) {
+    if (!url.trim()) return;
+    setImportState("loading");
+    try {
+      const res = await fetch("/api/leetcode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data: { found?: boolean; meta?: ProblemMeta; error?: string } = await res.json();
+      if (res.ok && data.found && data.meta) {
+        onChange({ ...meta, ...data.meta });
+        setImportState("idle");
+      } else {
+        setImportState("fail");
+      }
+    } catch {
+      setImportState("fail");
+    }
+  }
 
   function addTopic(topic: string) {
     if (!topic || meta.topicTags.includes(topic)) return;
@@ -48,6 +72,37 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
 
       {open && (
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2 border-t border-panel-border px-container-margin py-2 text-body-sm">
+          <form
+            className="flex w-full flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const input = (e.currentTarget.elements.namedItem("lc-url") as HTMLInputElement).value;
+              void importFromLeetCode(input);
+            }}
+          >
+            <label className="flex flex-col gap-1">
+              <span className="label-caps">Import from LeetCode</span>
+              <input
+                name="lc-url"
+                type="url"
+                placeholder="https://leetcode.com/problems/two-sum/"
+                className="w-72 rounded border border-panel-border bg-surface-container px-2 py-1 text-on-surface outline-none placeholder:text-text-muted focus:border-primary"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={importState === "loading"}
+              className="rounded border border-panel-border px-3 py-1 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
+            >
+              {importState === "loading" ? "Importing…" : "Import"}
+            </button>
+            {importState === "fail" && (
+              <span className="text-body-sm text-text-muted">
+                Couldn&apos;t fetch that problem — fill the fields below manually.
+              </span>
+            )}
+          </form>
+
           <label className="flex flex-col gap-1">
             <span className="label-caps">Problem name</span>
             <input

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateFlowchart } from "./generate";
+import { generateFlowchart, generateFlowchartWithTooltips } from "./generate";
 import { MethodIR } from "@/lib/ir";
 
 function method(overrides: Partial<MethodIR> = {}): MethodIR {
@@ -103,5 +103,31 @@ describe("generateFlowchart", () => {
     const a = generateFlowchart(method());
     const b = generateFlowchart(method());
     expect(a).toBe(b);
+  });
+});
+
+describe("generateFlowchartWithTooltips", () => {
+  it("populates nodeByLine so the editor cursor can find its target node", () => {
+    const m = method({
+      body: [
+        { type: "loop", kind: "while", line: 4, endLine: 7, boundType: "input-dependent", condition: "i < n", body: [] },
+        { type: "return", line: 8, value: "0" },
+      ],
+    });
+    const { nodeByLine, tooltips } = generateFlowchartWithTooltips(m);
+    // start + loop + return (and possibly more) all show up in the cursor map.
+    expect(nodeByLine.size).toBeGreaterThan(0);
+    // The id for the loop must be the one we get when looking up line 4.
+    const loopId = nodeByLine.get(4);
+    expect(loopId).toBeDefined();
+    expect(tooltips.get(loopId!)).toContain("while (while i < n is true)");
+  });
+
+  it("omits lines that have no node from nodeByLine", () => {
+    const m = method({
+      body: [{ type: "return", line: 5, value: "0" }],
+    });
+    const { nodeByLine } = generateFlowchartWithTooltips(m);
+    expect(nodeByLine.has(99)).toBe(false);
   });
 });

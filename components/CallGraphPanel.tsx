@@ -6,15 +6,20 @@ import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
 import { PanZoom } from "./PanZoom";
 import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
+import { attachSvgTooltips, type TooltipMap } from "@/lib/flowchart/tooltips";
 
 export function CallGraphPanel({
   diagram,
   diagramLight,
+  tooltips,
   name,
   onMethodClick,
 }: {
   diagram: string | null;
   diagramLight: string | null;
+  // nodeId -> tooltip text (signature, time, space, line count). Server-built
+  // alongside the diagram and injected as SVG <title> elements for hover.
+  tooltips?: Record<string, string> | null;
   name?: string;
   onMethodClick: (methodName: string) => void;
 }) {
@@ -57,11 +62,17 @@ export function CallGraphPanel({
       .then(({ svg }) => {
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
+          // Signature + time/space tooltips on hover.
+          const svgEl = containerRef.current.querySelector("svg");
+          if (svgEl && tooltips) {
+            const map: TooltipMap = new Map(Object.entries(tooltips));
+            attachSvgTooltips(svgEl as SVGSVGElement, map);
+          }
           setRendered(true);
         }
       })
       .catch((e) => setError(String(e)));
-  }, [scopedDiagram, theme]);
+  }, [scopedDiagram, theme, tooltips]);
 
   // Exports are always light.
   async function buildLightSvg(): Promise<SVGSVGElement | null> {
@@ -138,7 +149,7 @@ export function CallGraphPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         <PanZoom>
-          <div ref={containerRef} />
+          <div ref={containerRef} className="cl-diagram" />
         </PanZoom>
       </div>
     </div>

@@ -94,6 +94,23 @@ function nodeEndLine(node: StatementNode): number {
   return childEnds.length > 0 ? Math.max(node.line, ...childEnds) : node.line;
 }
 
+export type FlowchartWithTooltips = {
+  /** Mermaid flowchart syntax (unchanged — tooltips travel separately). */
+  diagram: string;
+  /**
+   * Mermaid node id -> full untruncated tooltip text. The panels inject these
+   * as native SVG <title> elements via the DOM API after rendering, so the
+   * text never passes through the mermaid parser (XSS-safe by construction).
+   */
+  tooltips: Map<string, string>;
+  /**
+   * Source line -> mermaid node id. The editor's cursor highlight uses this
+   * to find which SVG group to pulse when the user is parked on a line.
+   * Lines without a node (e.g. blank lines, comments-only lines) are absent.
+   */
+  nodeByLine: Map<number, string>;
+};
+
 /**
  * Converts a method's statement tree into Mermaid flowchart syntax.
  *
@@ -105,8 +122,14 @@ function nodeEndLine(node: StatementNode): number {
  * Each node gets a `click` binding wired to a global `onFlowchartNodeClick(line)`
  * handler (registered by the frontend) so clicking a node highlights the
  * corresponding source line in the editor (see DESIGN.md 3.2).
+ *
+ * Full untruncated node text is returned in `tooltips` for the panels to
+ * inject as hover tooltips.
  */
-export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): string {
+export function generateFlowchartWithTooltips(
+  method: MethodIR,
+  theme: Theme = "dark"
+): FlowchartWithTooltips {
   let idCounter = 0;
   const nextId = (): string => {
     idCounter += 1;
@@ -116,17 +139,21 @@ export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): stri
   const nodes: NodeDef[] = [];
   const edges: Edge[] = [];
   const emitted: EmittedNode[] = [];
+  const tooltips = new Map<string, string>();
+  const nodeByLine = new Map<number, string>();
 
   function addNode(
     shape: NodeDef["shape"],
     text: string,
     line: number,
     cssClass: string,
-    endLine?: number
+    endLine?: number,
+    tooltip?: string
   ): string {
     const id = nextId();
     nodes.push({ id, shape, text, line, cssClass });
     emitted.push({ id, line, endLine: endLine ?? line });
+    if (tooltip) tooltips.set(id, tooltip);
     return id;
   }
 
@@ -160,7 +187,8 @@ export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): stri
           `${stmt.kind}${condition} · L${stmt.line}`,
           stmt.line,
           "loopNode",
-          stmt.endLine
+          stmt.endLine,
+          stmt.condition ? `${stmt.kind} (while ${stmt.condition} is true) — lines ${stmt.line}-${stmt.endLine}` : `${stmt.kind} loop — lines ${stmt.line}-${stmt.endLine}`
         );
         edges.push({ from: entryId, to: loopId });
         const bodyExit = walk(stmt.body, loopId);
@@ -174,7 +202,11 @@ export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): stri
           `if ${truncate(firstCondition, 40)} · L${stmt.line}`,
           stmt.line,
           "decision",
-          nodeEndLine(stmt)
+          nodeEndLine(stmt),
+          stmt.branches
+            .filter((b) => b.condition)
+            .map((b) => `if ${b.condition}`)
+            .join("; ") || `if — line ${stmt.line}`
         );
         edges.push({ from: entryId, to: ifId });
         const joinId = addNode("rect", "merge", stmt.line, "process");
@@ -220,14 +252,23 @@ export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): stri
           "subroutine",
           `${truncate(stmt.target, 24)}${args} · L${stmt.line}`,
           stmt.line,
-          stmt.isRecursive ? "recursion" : "callNode"
+          stmt.isRecursive ? "recursion" : "callNode",
+          undefined,
+          `${stmt.target}(${stmt.args ?? ""})${stmt.isRecursive ? " — recursive call" : ""}`
         );
         edges.push({ from: entryId, to: callId });
         return callId;
       }
       case "return": {
         const value = stmt.value ? ` ${truncate(stmt.value, 32)}` : "";
-        const retId = addNode("stadium", `return${value} · L${stmt.line}`, stmt.line, "returnNode");
+        const retId = addNode(
+          "stadium",
+          `return${value} · L${stmt.line}`,
+          stmt.line,
+          "returnNode",
+          undefined,
+          stmt.value ? `return ${stmt.value}` : "return"
+        );
         edges.push({ from: entryId, to: retId });
         return retId;
       }
@@ -236,7 +277,9 @@ export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): stri
           "rect",
           `${truncate(stmt.text, 44)} · L${stmt.line}`,
           stmt.line,
-          "process"
+          "process",
+          undefined,
+          stmt.text
         );
         edges.push({ from: entryId, to: stmtId });
         return stmtId;
@@ -269,22 +312,36 @@ export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): stri
         line: tag.line,
         cssClass: NOTE_CLASS[tag.tag],
       });
+      tooltips.set(noteId, `// ${tag.tag}: ${tag.text}`);
       edges.push({ from: ownerId, to: noteId, dotted: true });
     }
   }
 
-  const lines: string[] = ["flowchart TD"];
-  for (const node of nodes) {
-    lines.push(`  ${node.id}${shapeSyntax(node.shape, node.text)}:::${node.cssClass}`);
-    lines.push(`  click ${node.id} call onFlowchartNodeClick("${node.line}")`);
-  }
+    for (const node of nodes) {
+      // Source-line → mermaid node id. The editor's cursor highlight uses this
+      // to find which SVG group to pulse when the user is parked on a line.
+      nodeByLine.set(node.line, node.id);
+    }
+    const lines: string[] = ["flowchart TD"];
+    for (const node of nodes) {
+      lines.push(`  ${node.id}${shapeSyntax(node.shape, node.text)}:::${node.cssClass}`);
+      lines.push(`  click ${node.id} call onFlowchartNodeClick("${node.line}")`);
+    }
   for (const edge of edges) {
     const arrow = edge.dotted ? "-.->" : edge.label ? `-- ${edge.label} -->` : "-->";
     lines.push(`  ${edge.from} ${arrow} ${edge.to}`);
   }
   lines.push(CLASS_DEFS[theme].split("\n").map((l) => `  ${l}`).join("\n"));
 
-  return lines.join("\n");
+  return { diagram: lines.join("\n"), tooltips, nodeByLine };
+}
+
+/**
+ * Back-compat wrapper: diagram text only. Kept for exports/tests that don't
+ * show tooltips (SVG downloads, PDF reports).
+ */
+export function generateFlowchart(method: MethodIR, theme: Theme = "dark"): string {
+  return generateFlowchartWithTooltips(method, theme).diagram;
 }
 
 function shapeSyntax(shape: NodeDef["shape"], text: string): string {

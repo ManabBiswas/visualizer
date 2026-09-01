@@ -27,10 +27,17 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   onMount?: (editor: CodeEditorHandle) => void;
+  onCursorChange?: (line: number) => void;
   padding?: { top?: number; bottom?: number };
 };
 
-export function CodeEditor({ value, onChange, onMount, padding = { top: 12, bottom: 12 } }: Props) {
+export function CodeEditor({
+  value,
+  onChange,
+  onMount,
+  onCursorChange,
+  padding = { top: 12, bottom: 12 },
+}: Props) {
   const [configured, setConfigured] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const { theme } = useTheme();
@@ -74,6 +81,11 @@ export function CodeEditor({ value, onChange, onMount, padding = { top: 12, bott
   const handleMount: OnMount = (editor, monaco) => {
     editor.layout();
     monaco.editor.remeasureFonts();
+    if (onCursorChange) {
+      const sub = editor.onDidChangeCursorPosition((e) => onCursorChange(e.position.lineNumber));
+      // Editor disposes its own listeners; nothing else to clean up.
+      void sub;
+    }
     onMount?.(editor);
   };
 
