@@ -17,7 +17,7 @@ const CONTENT_SECURITY_POLICY = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-export function middleware(_req: NextRequest) {
+export function proxy(_req: NextRequest) {
   const res = NextResponse.next();
   res.headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   res.headers.set("X-Content-Type-Options", "nosniff");
