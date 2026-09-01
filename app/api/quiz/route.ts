@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { cleanQueryParam, isValidId } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
+import { pickFocusSession } from "@/lib/spaced/focus";
 
 type QuizRow = {
   id: string;
@@ -88,6 +89,26 @@ export async function GET(req: NextRequest) {
   if (problemId) cards = cards.filter((c) => c.problemId === problemId);
   if (topic) cards = cards.filter((c) => c.topics.includes(topic));
   if (dueOnly) cards = cards.filter((c) => c.due);
+
+  // Focus session: replace the filtered list with a weakest-topics drill.
+  // Runs after the other filters so ?focus=weakest&problem=X scopes the drill
+  // to that problem's cards if the user wants it.
+  if (req.nextUrl.searchParams.get("focus") === "weakest") {
+    const session = pickFocusSession(
+      cards.map((c) => ({
+        id: c.id,
+        topics: c.topics,
+        easeFactor: c.state ? c.state.easeFactor : null,
+        due: c.due,
+      })),
+      10
+    );
+    const byId = new Map(cards.map((c) => [c.id, c]));
+    const focused = session.cards
+      .map((fc) => byId.get(fc.id))
+      .filter((c): c is NonNullable<typeof c> => Boolean(c));
+    return NextResponse.json({ cards: focused, focus: session.topics });
+  }
 
   return NextResponse.json({ cards });
 }

@@ -36,6 +36,10 @@ function QuizPage() {
   const [queue, setQueue] = useState<QuizCard[]>([]);
   const [topicFilter, setTopicFilter] = useState("");
   const [dueOnly, setDueOnly] = useState(true);
+  // When set, a focus session is active: the banner lists the drilled topics
+  // and the queue came from /api/quiz?focus=weakest instead of the filters.
+  const [focusTopics, setFocusTopics] = useState<string[] | null>(null);
+  const [focusLoading, setFocusLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
   const [answerDraft, setAnswerDraft] = useState("");
@@ -65,6 +69,28 @@ function QuizPage() {
   useEffect(() => {
     loadCards();
   }, [loadCards]);
+
+  async function startFocusSession() {
+    setFocusLoading(true);
+    try {
+      const res = await fetch("/api/quiz?focus=weakest");
+      const d: { cards?: QuizCard[]; focus?: string[] } = await res.json();
+      setQueue(d.cards ?? []);
+      setFocusTopics(d.focus ?? []);
+      setReviewed(0);
+      setLoading(false);
+    } catch {
+      setNotice("Could not build a focus session.");
+    } finally {
+      setFocusLoading(false);
+    }
+  }
+
+  function exitFocusSession() {
+    setFocusTopics(null);
+    setLoading(true);
+    loadCards();
+  }
 
   const current = queue[0];
 
@@ -147,10 +173,13 @@ function QuizPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <select
+          {!focusTopics && (
+            <>
+              <select
             value={topicFilter}
             onChange={(e) => {
               setTopicFilter(e.target.value);
+              setFocusTopics(null);
               setLoading(true);
             }}
             className="rounded bg-surface-container-high px-2 py-1 text-body-sm text-on-surface"
@@ -169,11 +198,22 @@ function QuizPage() {
               checked={dueOnly}
               onChange={(e) => {
                 setDueOnly(e.target.checked);
+                setFocusTopics(null);
                 setLoading(true);
               }}
             />
             due only
           </label>
+            </>
+          )}
+          <button
+            disabled={focusLoading || allCards.length === 0}
+            onClick={startFocusSession}
+            className="rounded bg-primary-container px-2 py-1 text-body-sm font-medium text-on-primary-container hover:opacity-90 disabled:opacity-40"
+            title="Drill up to 10 cards from your weakest topics (lowest average ease)"
+          >
+            {focusLoading && focusTopics === null ? "Building…" : "Focus session"}
+          </button>
           <button
             disabled={allCards.length === 0}
             onClick={exportAnki}
@@ -186,6 +226,23 @@ function QuizPage() {
       </div>
 
       {notice && <div className="mb-3 rounded border border-panel-border bg-surface-container px-3 py-2 text-body-sm text-on-surface">{notice}</div>}
+
+      {focusTopics && (
+        <div className="mb-3 flex items-center gap-3 rounded border border-primary/40 bg-primary/10 px-3 py-2 text-body-sm text-on-surface">
+          <span className="min-w-0 flex-1">
+            Focus session — drilling your weakest topics:{" "}
+            <span className="font-medium text-primary">
+              {focusTopics.length > 0 ? focusTopics.join(", ") : "your untagged cards"}
+            </span>
+          </span>
+          <button
+            onClick={exitFocusSession}
+            className="shrink-0 rounded border border-panel-border px-2 py-0.5 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+          >
+            Exit session
+          </button>
+        </div>
+      )}
 
       {status === "unauthenticated" ? (
         <SignInPrompt
