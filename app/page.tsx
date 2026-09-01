@@ -191,6 +191,9 @@ export default function LandingPage() {
               <Link href="/quiz" className="text-body-sm text-on-surface-variant hover:text-primary">
                 Quiz
               </Link>
+              <Link href="/progress" className="text-body-sm text-on-surface-variant hover:text-primary">
+                Progress
+              </Link>
             </div>
           </div>
         </div>

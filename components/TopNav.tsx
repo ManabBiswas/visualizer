@@ -10,6 +10,7 @@ const links = [
   { href: "/analyze", label: "Editor" },
   { href: "/log", label: "Log" },
   { href: "/quiz", label: "Quiz" },
+  { href: "/progress", label: "Progress" },
   { href: "/diff", label: "Diff" },
 ];
 
