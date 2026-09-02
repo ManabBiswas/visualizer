@@ -48,9 +48,18 @@ export async function POST(req: NextRequest) {
   }
 
   const existing = db
-    .prepare("SELECT repetitions, ease_factor, interval_days, due_date, last_reviewed FROM card_states WHERE note_id = ?")
+    .prepare(
+      "SELECT repetitions, ease_factor, interval_days, due_date, last_reviewed, lapse_count FROM card_states WHERE note_id = ?",
+    )
     .get(noteId) as
-    | { repetitions: number; ease_factor: number; interval_days: number; due_date: string; last_reviewed: string | null }
+    | {
+        repetitions: number;
+        ease_factor: number;
+        interval_days: number;
+        due_date: string;
+        last_reviewed: string | null;
+        lapse_count: number;
+      }
     | undefined;
 
   const current: CardState = existing
@@ -64,17 +73,29 @@ export async function POST(req: NextRequest) {
     : newCardState();
 
   const next = schedule(current, grade as Grade);
+  // Mistake journal: "again" grades accumulate forever (unlike repetitions,
+  // which reset on lapse) so chronic offenders stay identifiable.
+  const lapseCount = (existing?.lapse_count ?? 0) + (grade === "again" ? 1 : 0);
 
   db.prepare(
-    `INSERT INTO card_states (note_id, repetitions, ease_factor, interval_days, due_date, last_reviewed)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO card_states (note_id, repetitions, ease_factor, interval_days, due_date, last_reviewed, lapse_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(note_id) DO UPDATE SET
        repetitions = excluded.repetitions,
        ease_factor = excluded.ease_factor,
        interval_days = excluded.interval_days,
        due_date = excluded.due_date,
-       last_reviewed = excluded.last_reviewed`,
-  ).run(noteId, next.repetitions, next.easeFactor, next.intervalDays, next.dueDate, next.lastReviewed);
+       last_reviewed = excluded.last_reviewed,
+       lapse_count = excluded.lapse_count`,
+  ).run(
+    noteId,
+    next.repetitions,
+    next.easeFactor,
+    next.intervalDays,
+    next.dueDate,
+    next.lastReviewed,
+    lapseCount
+  );
 
-  return NextResponse.json({ state: next });
+  return NextResponse.json({ state: next, lapseCount });
 }

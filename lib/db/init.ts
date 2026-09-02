@@ -108,4 +108,10 @@ export function migrate(db: Database.Database): void {
   if (!noteColumns.some((c) => c.name === "answer")) {
     db.exec("ALTER TABLE notes ADD COLUMN answer TEXT");
   }
+  // card_states.lapse_count: how many times the card was graded "again" —
+  // cards at >= MISTAKE_THRESHOLD form the mistake journal.
+  const cardColumns = db.prepare("PRAGMA table_info(card_states)").all() as { name: string }[];
+  if (!cardColumns.some((c) => c.name === "lapse_count")) {
+    db.exec("ALTER TABLE card_states ADD COLUMN lapse_count INTEGER NOT NULL DEFAULT 0");
+  }
 }

@@ -82,3 +82,35 @@ describe("schema v2 migration", () => {
     expect((db.prepare("SELECT COUNT(*) c FROM problems").get() as { c: number }).c).toBe(1);
   });
 });
+
+describe("card_states.lapse_count migration", () => {
+  it("adds lapse_count with default 0 and keeps existing rows", () => {
+    migrate(db);
+    db.prepare("INSERT INTO users (id, github_id, login) VALUES (?, ?, ?)").run("u1", "101", "octocat");
+    db.prepare("INSERT INTO problems (id, user_id, name, source_code) VALUES (?, ?, ?, ?)").run(
+      "p1", "u1", "Two Sum", "class A {}",
+    );
+    db.prepare("INSERT INTO notes (id, problem_id, tag_type, text) VALUES (?, ?, ?, ?)").run(
+      "n1", "p1", "q", "why?",
+    );
+    db.prepare(
+      "INSERT INTO card_states (note_id, repetitions, ease_factor, interval_days, due_date) VALUES (?, 0, 2.5, 0, ?)",
+    ).run("n1", new Date().toISOString());
+    // Re-migrate: the lightweight migration adds lapse_count to the
+    // pre-existing table without touching the row.
+    migrate(db);
+    const cols = (db.prepare("PRAGMA table_info(card_states)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain("lapse_count");
+    const row = db
+      .prepare("SELECT lapse_count FROM card_states WHERE note_id = ?")
+      .get("n1") as { lapse_count: number };
+    expect(row.lapse_count).toBe(0);
+  });
+
+  it("is idempotent when lapse_count already exists", () => {
+    migrate(db);
+    migrate(db);
+    const cols = (db.prepare("PRAGMA table_info(card_states)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols.filter((c) => c === "lapse_count")).toHaveLength(1);
+  });
+});

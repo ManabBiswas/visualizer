@@ -18,7 +18,11 @@ type QuizRow = {
   interval_days: number | null;
   due_date: string | null;
   last_reviewed: string | null;
+  lapse_count: number | null;
 };
+
+/** Cards graded "again" at least this many times form the mistake journal. */
+const MISTAKE_THRESHOLD = 3;
 
 export async function GET(req: NextRequest) {
   const userId = await getAuthedUserId();
@@ -29,6 +33,7 @@ export async function GET(req: NextRequest) {
   const topic = cleanQueryParam(req.nextUrl.searchParams.get("topic"));
   const problemId = cleanQueryParam(req.nextUrl.searchParams.get("problem"));
   const dueOnly = req.nextUrl.searchParams.get("due") === "1";
+  const mistakesOnly = req.nextUrl.searchParams.get("mistakes") === "1";
 
   if (problemId && !isValidId(problemId)) {
     return NextResponse.json({ error: "Invalid problem id." }, { status: 400 });
@@ -41,7 +46,8 @@ export async function GET(req: NextRequest) {
       .prepare(
         `SELECT n.id, n.problem_id, n.text AS question, n.answer, n.line_number,
                 p.name AS problem_name, p.topic_tags,
-                cs.repetitions, cs.ease_factor, cs.interval_days, cs.due_date, cs.last_reviewed
+                cs.repetitions, cs.ease_factor, cs.interval_days, cs.due_date, cs.last_reviewed,
+                cs.lapse_count
          FROM notes n
          JOIN problems p ON p.id = n.problem_id
          LEFT JOIN card_states cs ON cs.note_id = n.id
@@ -83,12 +89,15 @@ export async function GET(req: NextRequest) {
               lastReviewed: r.last_reviewed,
             },
       due: r.due_date === null || new Date(r.due_date).getTime() <= now,
+      lapseCount: r.lapse_count ?? 0,
     };
   });
 
   if (problemId) cards = cards.filter((c) => c.problemId === problemId);
   if (topic) cards = cards.filter((c) => c.topics.includes(topic));
   if (dueOnly) cards = cards.filter((c) => c.due);
+  // Mistake journal: cards that keep tripping you up (>= 3 "again" grades).
+  if (mistakesOnly) cards = cards.filter((c) => c.lapseCount >= MISTAKE_THRESHOLD);
 
   // Focus session: replace the filtered list with a weakest-topics drill.
   // Runs after the other filters so ?focus=weakest&problem=X scopes the drill
