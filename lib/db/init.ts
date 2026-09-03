@@ -114,4 +114,10 @@ export function migrate(db: Database.Database): void {
   if (!cardColumns.some((c) => c.name === "lapse_count")) {
     db.exec("ALTER TABLE card_states ADD COLUMN lapse_count INTEGER NOT NULL DEFAULT 0");
   }
+ 
+  const problemColumns = db.prepare("PRAGMA table_info(problems)").all() as { name: string }[];
+  if (!problemColumns.some((c) => c.name === "share_slug")) {
+    db.exec("ALTER TABLE problems ADD COLUMN share_slug TEXT");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_problems_share_slug ON problems(share_slug) WHERE share_slug IS NOT NULL");
+  }
 }

@@ -19,6 +19,7 @@ type ProblemRow = {
   space_complexity: string | null;
   note_count: number;
   created_at: string;
+  share_slug: string | null;
 };
 
 const DIFFICULTY_COLOR: Record<string, string> = {
@@ -80,6 +81,47 @@ export default function LogPage() {
     }));
   }
 
+  // --- Share links ---
+  // Per-row share state: the slug once created (local copy of the row's
+  // share_slug), plus transient copy feedback. Slugs are capability URLs —
+  // POST is idempotent (re-sharing returns the same slug), DELETE revokes.
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+
+  async function shareProblem(id: string) {
+    try {
+      const res = await fetch(`/api/problems/${encodeURIComponent(id)}/share`, { method: "POST" });
+      const d: { slug?: string; error?: string } = await res.json();
+      if (!res.ok || !d.slug) throw new Error(d.error ?? "Share failed.");
+      setProblems((ps) => ps.map((p) => (p.id === id ? { ...p, share_slug: d.slug! } : p)));
+      const url = `${window.location.origin}/p/${d.slug}`;
+      // Clipboard API can be unavailable in embedded contexts; fall back to
+      // a transient notice either way so the link is always recoverable.
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareNotice(`Link copied: ${url}`);
+      } catch {
+        setShareNotice(`Share link: ${url}`);
+      }
+      setTimeout(() => setShareNotice(null), 6000);
+    } catch (e) {
+      setShareNotice((e as Error).message);
+      setTimeout(() => setShareNotice(null), 6000);
+    }
+  }
+
+  async function revokeShare(id: string) {
+    try {
+      const res = await fetch(`/api/problems/${encodeURIComponent(id)}/share`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Revoke failed.");
+      setProblems((ps) => ps.map((p) => (p.id === id ? { ...p, share_slug: null } : p)));
+      setShareNotice("Share link revoked — the page now 404s.");
+      setTimeout(() => setShareNotice(null), 6000);
+    } catch (e) {
+      setShareNotice((e as Error).message);
+      setTimeout(() => setShareNotice(null), 6000);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col overflow-auto p-panel-padding">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -134,6 +176,12 @@ export default function LogPage() {
         </div>
       </div>
 
+      {shareNotice && (
+        <div className="mb-3 flex items-center gap-2 rounded border border-panel-border bg-surface-container px-3 py-2 text-body-sm text-on-surface">
+          <span className="min-w-0 flex-1 truncate">{shareNotice}</span>
+        </div>
+      )}
+
       {status === "unauthenticated" ? (
         <SignInPrompt
           title="Sign in to see your problem log"
@@ -157,6 +205,7 @@ export default function LogPage() {
               <th className="py-2 font-medium">Space</th>
               <th className="py-2 font-medium">Notes</th>
               <th className="py-2 font-medium">Solved</th>
+              <th className="py-2 font-medium">Share</th>
             </tr>
           </thead>
           <tbody>
@@ -188,6 +237,43 @@ export default function LogPage() {
                 <td className="py-2 font-mono text-code-sm text-on-surface">{p.space_complexity}</td>
                 <td className="py-2 text-on-surface-variant">{p.note_count}</td>
                 <td className="py-2 text-text-muted">{new Date(p.created_at).toLocaleDateString()}</td>
+                <td className="py-2">
+                  {p.share_slug ? (
+                    <span className="flex items-center gap-1">
+                      <a
+                        href={`/p/${p.share_slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded bg-surface-container-high px-1.5 py-0.5 text-code-sm text-primary hover:underline"
+                        title="Open the public share page"
+                      >
+                        Public ↗
+                      </a>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void revokeShare(p.id);
+                        }}
+                        className="rounded px-1.5 py-0.5 text-code-sm text-text-muted hover:text-error"
+                        title="Revoke the share link (the page will 404)"
+                      >
+                        Revoke
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void shareProblem(p.id);
+                      }}
+                      className="rounded px-1.5 py-0.5 text-code-sm text-text-muted hover:text-primary"
+                      title="Create a public read-only share link for this analysis"
+                    >
+                      Share
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

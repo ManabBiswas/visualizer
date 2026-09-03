@@ -114,3 +114,47 @@ describe("card_states.lapse_count migration", () => {
     expect(cols.filter((c) => c === "lapse_count")).toHaveLength(1);
   });
 });
+
+describe("problems.share_slug migration", () => {
+  it("adds a nullable unique share_slug to a pre-existing problems table", () => {
+    migrate(db);
+    db.prepare("INSERT INTO users (id, github_id, login) VALUES (?, ?, ?)").run("u1", "101", "octocat");
+    db.prepare("INSERT INTO problems (id, user_id, name, source_code) VALUES (?, ?, ?, ?)").run(
+      "p1", "u1", "Two Sum", "class A {}",
+    );
+    // Re-migrate: the lightweight ALTER adds share_slug to the old table.
+    migrate(db);
+    const cols = (db.prepare("PRAGMA table_info(problems)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain("share_slug");
+
+    // Default is private (NULL) and slugs must be unique.
+    const row = db.prepare("SELECT share_slug FROM problems WHERE id = 'p1'").get() as { share_slug: string | null };
+    expect(row.share_slug).toBeNull();
+
+    db.prepare("UPDATE problems SET share_slug = ? WHERE id = 'p1'").run("abc123def456");
+    db.prepare("INSERT INTO problems (id, user_id, name, source_code, share_slug) VALUES (?, ?, ?, ?, ?)").run(
+      "p2", "u1", "Three Sum", "class B {}", "xyz789xyz789",
+    );
+    expect(() =>
+      db.prepare("UPDATE problems SET share_slug = ? WHERE id = 'p2'").run("abc123def456"),
+    ).toThrow();
+    // Revoking restores NULL and frees the slug for reuse.
+    db.prepare("UPDATE problems SET share_slug = NULL WHERE id = 'p1'").run();
+    db.prepare("UPDATE problems SET share_slug = ? WHERE id = 'p2'").run("abc123def456");
+  });
+
+  it("keeps multiple NULL share_slugs (partial unique index)", () => {
+    migrate(db);
+    migrate(db);
+    db.prepare("INSERT INTO users (id, github_id, login) VALUES (?, ?, ?)").run("u1", "101", "octocat");
+    const insert = db.prepare(
+      "INSERT INTO problems (id, user_id, name, source_code) VALUES (?, ?, ?, ?)",
+    );
+    insert.run("p1", "u1", "A", "class A {}");
+    insert.run("p2", "u1", "B", "class B {}");
+    // Two private problems must coexist — the unique index is partial
+    // (WHERE share_slug IS NOT NULL) so NULLs never collide.
+    const rows = db.prepare("SELECT COUNT(*) c FROM problems").get() as { c: number };
+    expect(rows.c).toBe(2);
+  });
+});

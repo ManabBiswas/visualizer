@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     rows = db
       .prepare(
         `SELECT p.id, p.name, p.link, p.topic_tags, p.difficulty, p.created_at,
+                p.share_slug,
                 la.time_complexity, la.space_complexity,
                 (SELECT COUNT(*) FROM notes n WHERE n.problem_id = p.id) as note_count
          FROM problems p
