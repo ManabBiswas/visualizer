@@ -13,6 +13,7 @@ import { RunConsole } from "@/components/RunConsole";
 import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
 import { SamplePicker } from "@/components/SamplePicker";
+import { AiQuizDrawer } from "@/components/AiQuizDrawer";
 import { SAMPLES, findSample, type Sample } from "@/data/samples";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
@@ -88,6 +89,10 @@ function EditorPage() {
   // Sample picker visibility. Opens by default on a fresh visit (cold start),
   // stays closed when deep-linking (?sample=) or editing a saved problem.
   const [sampleOpen, setSampleOpen] = useState(true);
+  // BYO-key AI quiz-drafting drawer (Notes tab). Only meaningful for saved
+  // problems — the endpoint loads the problem + IR owner-scoped.
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const editorRef = useRef<CodeEditorHandle | null>(null);
 
   // Clear a stale save warning when navigating to a different problem
@@ -383,6 +388,41 @@ function EditorPage() {
                   >
                     Quiz these notes
                   </Link>
+                )}
+                {savedProblemId && (
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setAiOpen((o) => !o);
+                        setAiNotice(null);
+                      }}
+                      className={`self-start rounded border px-3 py-1 text-body-sm font-medium ${
+                        aiOpen
+                          ? "border-primary text-primary"
+                          : "border-panel-border text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                      }`}
+                      title="Optional: draft quiz cards with your own AI provider key — drafts are reviewed before they enter the deck"
+                    >
+                      {aiOpen ? "Close AI drafting" : "Draft quiz cards with AI…"}
+                    </button>
+                    {aiOpen && (
+                      <AiQuizDrawer
+                        problemId={savedProblemId}
+                        problemName={meta.name || "this problem"}
+                        onClose={() => setAiOpen(false)}
+                        onAccepted={(n) =>
+                          setAiNotice(
+                            n === 1
+                              ? "Card added to this problem's deck."
+                              : `${n} cards added to this problem's deck.`,
+                          )
+                        }
+                      />
+                    )}
+                    {aiNotice && (
+                      <span className="text-body-sm text-success">{aiNotice}</span>
+                    )}
+                  </div>
                 )}
                 {!current || current.method.comments.length === 0 ? (
                   <div className="text-body-sm text-text-muted">

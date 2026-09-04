@@ -26,6 +26,7 @@ type QuizCard = {
   } | null;
   due: boolean;
   lapseCount: number;
+  source: "user" | "ai";
 };
 
 // Deck views: all cards, only due ones, or the mistake journal (cards
@@ -330,6 +331,14 @@ function QuizPage() {
                   title={`You have graded this card "again" ${current.lapseCount} time${current.lapseCount === 1 ? "" : "s"}`}
                 >
                   lapsed {current.lapseCount}×
+                </span>
+              )}
+              {current.source === "ai" && (
+                <span
+                  className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-code-sm text-primary"
+                  title="Accepted from an AI-drafted suggestion — provenance kept for transparency"
+                >
+                  AI
                 </span>
               )}
             </span>

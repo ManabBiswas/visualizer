@@ -18,6 +18,7 @@ CodeLens is a Java DSA analysis and revision tool for interview preparation. Pas
 - **Call graph** for multi-method problems (e.g. DFS with a helper): internal methods and library calls as a navigable graph with per-node complexity badges (`O(n log n)` etc.) and signature/complexity tooltips — click a method to jump to its flowchart
 - **Diff mode**: paste your brute-force and optimized solutions side by side, get a color-coded complexity delta (`O(n²) → O(n) improved`) with reasoning for both, plus both flowcharts with click-to-line navigation
 - **Quiz mode with spaced repetition**: every `// q:` tag becomes a flashcard; reveal with spacebar, grade Again/Good/Easy (SM-2 scheduling), edit and save answers, filter by topic or due date
+- **Optional AI quiz drafting (BYO-key)**: bring your own OpenAI, Gemini, or Anthropic API key to draft quiz cards grounded in your code's static analysis — loop bounds, call targets, and complexity verdicts feed the prompt. Drafts are shown for review and editing, and only cards you explicitly accept enter the deck (marked with an `AI` chip). Your key stays on your device, is sent only to your chosen provider's pinned endpoint, and is never logged or stored server-side. CodeLens itself remains free and keyless
 - **Focus sessions**: one click drills up to 10 cards from your weakest topics — topics ranked by average ease factor (never-reviewed first), interleaved round-robin so one big topic can't monopolize the session
 - **Mistake journal**: cards graded "again" 3+ times stay flagged with a red `lapsed N×` badge and get their own All | Due | Mistakes view — review what you keep failing, not what you know
 - **Progress dashboard** `/progress`: due-today count, per-topic mastery (average ease factor with weakest markers), a 30-day activity heatmap (saves + reviews), and a day streak
@@ -86,10 +87,12 @@ app/                  Next.js routes and pages
   api/analyze/        analysis endpoint (parser -> IR -> analysis -> user-scoped upsert)
   api/auth/           Auth.js handlers (GitHub sign-in)
   api/leetcode/       LeetCode URL -> problem metadata import (unofficial GraphQL)
+  api/ai/quiz/        BYO-key quiz drafting (provider-pinned, key never stored)
   api/problems/       log listing + single-problem retrieval (owner-scoped)
   api/problems/[id]/share/  share-slug create (POST) / revoke (DELETE), owner-gated
   api/progress/       progress-dashboard stats (owner-scoped)
   api/quiz/           quiz cards + spaced-repetition review (owner-scoped)
+  api/quiz/cards/     accept reviewed AI-drafted cards (owner-scoped, source='ai')
   api/notes/          quiz answer editing (owner-scoped)
   api/run/            compile + execute Java with stdin input (auth + feature-flag gated)
   p/[slug]/           public read-only shared-analysis page (capability URL)
@@ -110,6 +113,7 @@ lib/
   progress/           dashboard statistics (pure functions over card/problem rows)
   share/              share-slug generation + strict shape validation
   leetcode/           URL parsing + GraphQL response mapping (pure)
+  ai/                 grounded prompt builder, provider registry (pinned URLs), strict output parser
   export/             PNG/SVG/Markdown/CSV/Anki/PDF download helpers
   security/           input validation, sanitization, rate limiting, secret redaction
   auth.ts             Auth.js configuration (GitHub provider, JWT sessions)
@@ -151,7 +155,8 @@ Input is treated as hostile by default (`lib/security/`):
 - **Secrets**: required env vars are asserted at boot; subprocesses (JVM parser / run console) inherit only an allowlisted env (PATH, HOME, JAVA_HOME — never tokens or secrets); error messages shown to clients are redacted against the secret registry
 - **Multi-tenant**: every query is scoped by the authenticated user's id; foreign resources are indistinguishable from missing ones (404), and anonymous requests get 401 before any DB work
 - **Parser abuse**: source is capped at 200k chars (2MB on the Java side), the JVM subprocess runs with a 15s kill timeout and an 8MB output cap, at most 4 parsers run concurrently, and pathological input (e.g. extreme nesting) is converted into a clean error instead of a JVM crash
-- **Abuse**: `/api/analyze` is rate-limited per IP (30/min), `/api/leetcode` at 10/min with an 8s upstream timeout, and `/api/run` at 20/min; malformed JSON, oversized payloads, and invalid metadata get 400s before any work happens
+- **Abuse**: `/api/analyze` is rate-limited per IP (30/min), `/api/leetcode` at 10/min with an 8s upstream timeout, `/api/run` at 20/min, and the AI drafting endpoint at 5/min; malformed JSON, oversized payloads, and invalid metadata get 400s before any work happens
+- **BYO-key AI drafting**: provider endpoints are hardcoded (openai/gemini/anthropic only — no user-supplied URLs, so no SSRF), keys are shape-validated and request-scoped, model output is strictly parsed and sanitized (length caps, control-char stripping, per-card validation), and error paths never echo keys back. Drafts are not persisted — accepted cards pass a separate human-approval endpoint that records `source='ai'` provenance
 - **Share links**: slugs are 12-char crypto-random base62 (~71 bits) stored with a partial unique index; the public page validates slug shape before SQL, leaks no user identity, is `noindex`, and revocation nulls the slug so the page 404s immediately — no public listing exists, so a slug is a pure capability URL
 - **Headers**: the proxy sets a strict Content-Security-Policy, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cross-Origin-Opener-Policy`
 - The parser is spawned with an argument array and `shell: false` — user code only ever reaches the JVM via stdin, never a shell
@@ -165,7 +170,7 @@ The parser is heuristic-driven but covers common DSA patterns well: nested loops
 
 ## Status
 
-Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parser, no JVM required), multi-color flowcharts with embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized), five curated samples with deep links, LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal and Anki export, progress dashboard (heatmap, streak, topic mastery), public share links, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, input-validation + secret-redaction security layer, and a full test suite (200 tests incl. TS/JVM parser parity).
+Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parser, no JVM required), multi-color flowcharts with embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized), five curated samples with deep links, LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal, Anki export and opt-in BYO-key AI quiz drafting, progress dashboard (heatmap, streak, topic mastery), public share links, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, input-validation + secret-redaction security layer, and a full test suite (225 tests incl. TS/JVM parser parity).
 
 v0.3 and v0.4 are shipped (share links, weak-topic drills, mistake journal). Remaining v0.4 backlog: GitHub journal sync, weekly email digest. See `docs/ROADMAP.md` (local) for the full plan.
 

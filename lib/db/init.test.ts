@@ -158,3 +158,35 @@ describe("problems.share_slug migration", () => {
     expect(rows.c).toBe(2);
   });
 });
+
+describe("notes.source migration", () => {
+  it("adds a nullable source column to a pre-existing notes table", () => {
+    migrate(db);
+    db.prepare("INSERT INTO users (id, github_id, login) VALUES (?, ?, ?)").run("u1", "101", "octocat");
+    db.prepare("INSERT INTO problems (id, user_id, name, source_code) VALUES (?, ?, ?, ?)").run(
+      "p1", "u1", "Two Sum", "class A {}",
+    );
+    db.prepare("INSERT INTO notes (id, problem_id, tag_type, text) VALUES (?, ?, 'q', ?)").run(
+      "n1", "p1", "user-authored question?",
+    );
+    // Re-migrate: adds source to the old table without touching the row.
+    migrate(db);
+    const cols = (db.prepare("PRAGMA table_info(notes)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain("source");
+    const row = db.prepare("SELECT source FROM notes WHERE id = 'n1'").get() as { source: string | null };
+    // Existing cards default to user-authored (NULL).
+    expect(row.source).toBeNull();
+
+    // AI-drafted cards record their provenance.
+    db.prepare("UPDATE notes SET source = 'ai' WHERE id = 'n1'").run();
+    const updated = db.prepare("SELECT source FROM notes WHERE id = 'n1'").get() as { source: string | null };
+    expect(updated.source).toBe("ai");
+  });
+
+  it("is idempotent when source already exists", () => {
+    migrate(db);
+    migrate(db);
+    const cols = (db.prepare("PRAGMA table_info(notes)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols.filter((c) => c === "source")).toHaveLength(1);
+  });
+});

@@ -19,6 +19,7 @@ type QuizRow = {
   due_date: string | null;
   last_reviewed: string | null;
   lapse_count: number | null;
+  source: string | null;
 };
 
 /** Cards graded "again" at least this many times form the mistake journal. */
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
         `SELECT n.id, n.problem_id, n.text AS question, n.answer, n.line_number,
                 p.name AS problem_name, p.topic_tags,
                 cs.repetitions, cs.ease_factor, cs.interval_days, cs.due_date, cs.last_reviewed,
-                cs.lapse_count
+                cs.lapse_count, n.source
          FROM notes n
          JOIN problems p ON p.id = n.problem_id
          LEFT JOIN card_states cs ON cs.note_id = n.id
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
             },
       due: r.due_date === null || new Date(r.due_date).getTime() <= now,
       lapseCount: r.lapse_count ?? 0,
+      source: r.source === "ai" ? "ai" : "user",
     };
   });
 

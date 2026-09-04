@@ -108,6 +108,10 @@ export function migrate(db: Database.Database): void {
   if (!noteColumns.some((c) => c.name === "answer")) {
     db.exec("ALTER TABLE notes ADD COLUMN answer TEXT");
   }
+ 
+  if (!noteColumns.some((c) => c.name === "source")) {
+    db.exec("ALTER TABLE notes ADD COLUMN source TEXT");
+  }
   // card_states.lapse_count: how many times the card was graded "again" —
   // cards at >= MISTAKE_THRESHOLD form the mistake journal.
   const cardColumns = db.prepare("PRAGMA table_info(card_states)").all() as { name: string }[];
