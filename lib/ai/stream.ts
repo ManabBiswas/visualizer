@@ -7,10 +7,17 @@
 
 import { coalesceContent } from "./extract";
 
-export type StreamAccumulator = { text: string; done: boolean };
+export type StreamAccumulator = {
+  text: string;
+  done: boolean;
+  /** Characters of reasoning-channel output (thinking models: GLM, R1, o1). */
+  reasoningChars: number;
+  /** finish_reason of the first chunk that carries one ("length", "stop", …). */
+  finishReason: string | null;
+};
 
 export function newAccumulator(): StreamAccumulator {
-  return { text: "", done: false };
+  return { text: "", done: false, reasoningChars: 0, finishReason: null };
 }
 
 /**
@@ -32,13 +39,28 @@ export function feedSseEvent(acc: StreamAccumulator, payload: string): void {
   } catch {
     return; // keep-alive comment or junk line
   }
-  const first = (chunk as { choices?: Array<{ delta?: { content?: unknown }; text?: unknown }> }).choices?.[0];
+  const first = (
+    chunk as {
+      choices?: Array<{
+        delta?: { content?: unknown; reasoning_content?: unknown };
+        text?: unknown;
+        finish_reason?: unknown;
+      }>;
+    }
+  ).choices?.[0];
   if (!first) return; // usage-only chunk (stream_options include_usage)
+  if (typeof first.finish_reason === "string" && first.finish_reason.length > 0 && !acc.finishReason) {
+    acc.finishReason = first.finish_reason;
+  }
   if (first.delta) {
     // delta.content is normally a string, but gateways that return typed
     // parts arrays in messages (tokenrouter) may do the same in deltas.
     const part = coalesceContent(first.delta.content);
     if (part) acc.text += part;
+    // Thinking models (GLM, DeepSeek-R1) stream their reasoning separately —
+    // tracked for diagnostics, never mixed into the answer text.
+    const reasoning = coalesceContent(first.delta.reasoning_content);
+    if (reasoning) acc.reasoningChars += reasoning.length;
   } else if (typeof first.text === "string") {
     acc.text += first.text; // legacy completions dialect
   }

@@ -98,6 +98,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description: `Big-O analysis, flowchart and revision notes for ${problem.name}${
       problem.difficulty ? ` (${problem.difficulty})` : ""
     }, shared via CodeLens.`,
+    // The opengraph-image.tsx file convention auto-attaches the dynamic
+    // preview card; twitter mirrors it for chat-app link previews.
+    twitter: { card: "summary_large_image" },
     robots: { index: false, follow: false },
   };
 }

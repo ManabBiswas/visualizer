@@ -45,6 +45,37 @@ describe("feedSseEvent", () => {
     feedSseEvent(acc, JSON.stringify({ choices: [] }));
     expect(acc.text).toBe("");
   });
+
+  it("tracks reasoning_content separately, never mixing it into text", () => {
+    const acc = newAccumulator();
+    feedSseEvent(acc, JSON.stringify({ choices: [{ delta: { reasoning_content: "thinking deeply..." } }] }));
+    feedSseEvent(acc, JSON.stringify({ choices: [{ delta: { reasoning_content: [{ type: "text", text: "more thought" }] } }] }));
+    feedSseEvent(acc, JSON.stringify({ choices: [{ delta: { content: "the actual answer" } }] }));
+    expect(acc.text).toBe("the actual answer");
+    expect(acc.reasoningChars).toBe("thinking deeply...".length + "more thought".length);
+  });
+
+  it("captures the first finish_reason (length, stop, content_filter)", () => {
+    const acc = newAccumulator();
+    feedSseEvent(acc, JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }] }));
+    feedSseEvent(acc, JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] }));
+    expect(acc.finishReason).toBe("length");
+  });
+
+  it("models the GLM-5.3 failure mode: all reasoning, budget cut, zero answer", () => {
+    const acc = newAccumulator();
+    // The model reasons for the whole budget...
+    for (let i = 0; i < 50; i++) {
+      feedSseEvent(acc, JSON.stringify({ choices: [{ delta: { reasoning_content: "reason ".repeat(20) } }] }));
+    }
+    // ...and the stream ends with finish_reason "length" and no content.
+    feedSseEvent(acc, JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }] }));
+    feedSseEvent(acc, "[DONE]");
+    expect(acc.text).toBe("");
+    expect(acc.reasoningChars).toBeGreaterThan(0);
+    expect(acc.finishReason).toBe("length");
+    expect(acc.done).toBe(true);
+  });
 });
 
 describe("splitSseBuffer", () => {

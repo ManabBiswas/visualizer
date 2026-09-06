@@ -176,7 +176,11 @@ describe("buildRequest — custom provider", () => {
       { role: "system", content: "SYS" },
       { role: "user", content: "USER" },
     ]);
-    expect(body.max_tokens).toBeLessThanOrEqual(2000);
+    // Custom providers get a bigger budget: reasoning models burn thousands
+    // of tokens thinking before the answer text starts.
+    expect(body.max_tokens).toBe(16000);
+    expect(body.stream).toBe(true);
+    expect(body.stream_options).toEqual({ include_usage: true });
   });
 
   it("omits the Authorization header entirely for keyless local servers", () => {

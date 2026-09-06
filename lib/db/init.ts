@@ -8,24 +8,59 @@ const DB_PATH = path.join(process.cwd(), "codelens.db");
 
 let db: Database.Database | null = null;
 
-export function getDb(): Database.Database {
-  if (db) return db;
-
+function connect(): Database.Database {
   if (TURSO_URL) {
     // libsql's bundled types lag its runtime: the constructor accepts
     // `authToken` for remote Turso connections (index.js reads opts.authToken),
     // but Database.Options was copied from better-sqlite3 and omits it.
-    db = new Database(TURSO_URL, {
+    return new Database(TURSO_URL, {
       authToken: process.env.TURSO_AUTH_TOKEN,
     } as Database.Options);
-  } else {
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
   }
-  db.pragma("foreign_keys = ON");
+  const local = new Database(DB_PATH);
+  local.pragma("journal_mode = WAL");
+  return local;
+}
 
+export function getDb(): Database.Database {
+  if (db) return db;
+  db = connect();
+  db.pragma("foreign_keys = ON");
   migrate(db);
   return db;
+}
+
+/**
+ * True when an error looks like a dead remote Turso stream — the Hrana
+ * protocol evicts idle connections server-side ("stream not found") and
+ * a long-lived server process keeps trying to use the corpse.
+ */
+function isStaleStreamError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /stream not found|Hrana|connection closed|disconnected/i.test(msg);
+}
+
+/**
+ * Like getDb(), but self-heals a stale remote connection: on the first
+ * stale-stream error the connection is torn down and re-established once,
+ * then the operation retried. Long-lived servers (next start / dev) sit
+ * idle between requests long enough for Turso to evict their streams.
+ */
+export function withDb<T>(op: (database: Database.Database) => T): T {
+  try {
+    return op(getDb());
+  } catch (err) {
+    if (db && isStaleStreamError(err)) {
+      try {
+        db.close();
+      } catch {
+        // already dead — closing a corpse can throw too
+      }
+      db = null;
+      return op(getDb());
+    }
+    throw err;
+  }
 }
 
 // Schema v2 (multi-user): problems are owned by a GitHub-authenticated user.

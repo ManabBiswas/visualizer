@@ -17,10 +17,11 @@ import type { ProgramIR } from "@/lib/ir";
 
 const RATE_LIMIT_PER_MINUTE = 5;
 // Pinned providers (OpenAI/Gemini/Anthropic) are fast; custom providers get
-// a longer budget — free-tier gateways queue requests and local Ollama
-// servers cold-start multi-GB models.
+// a much longer budget — free-tier gateways queue requests, local Ollama
+// servers cold-start multi-GB models, and THINKING models (GLM, R1) reason
+// per-card, so 7-10 card drafts can legitimately take several minutes.
 const FETCH_TIMEOUT_MS_PINNED = 30_000;
-const FETCH_TIMEOUT_MS_CUSTOM = 150_000;
+const FETCH_TIMEOUT_MS_CUSTOM = 300_000;
 
 function clientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
@@ -218,11 +219,14 @@ export async function POST(req: NextRequest) {
     // keeps bytes flowing on slow free-tier models. Non-streaming providers
     // (gemini, anthropic) take the plain-JSON path.
     let text: string | null;
+    let streamReasoningChars = 0;
+    let streamFinishReason: string | null = null;
+    let streamAborted = false;
     if (request.stream) {
+      const acc = newAccumulator();
+      let buffer = "";
+      const reader = res.body?.getReader();
       try {
-        const acc = newAccumulator();
-        let buffer = "";
-        const reader = res.body?.getReader();
         if (!reader) throw new Error("no body");
         const decoder = new TextDecoder();
         while (true) {
@@ -237,13 +241,21 @@ export async function POST(req: NextRequest) {
             break;
           }
         }
-        text = acc.text.length > 0 ? acc.text : null;
-      } catch {
-        return NextResponse.json(
-          { error: `${labelFor(provider, custom)} stream was interrupted mid-response — try again.` },
-          { status: 502 },
-        );
+      } catch (streamErr) {
+        // AbortError = OUR timeout fired (the provider was still streaming);
+        // anything else is a genuine mid-stream interruption. Either way,
+        // partial text is unusable for strict JSON — report which happened.
+        streamAborted = (streamErr as Error).name === "AbortError";
+        if (!streamAborted) {
+          return NextResponse.json(
+            { error: `${labelFor(provider, custom)} stream was interrupted mid-response — try again.` },
+            { status: 502 },
+          );
+        }
       }
+      streamReasoningChars = acc.reasoningChars;
+      streamFinishReason = acc.finishReason;
+      text = acc.text.length > 0 ? acc.text : null;
     } else {
       let data: unknown;
       try {
@@ -263,15 +275,35 @@ export async function POST(req: NextRequest) {
     }
 
     if (!text) {
-      return NextResponse.json(
-        {
-          error:
-            provider === "custom"
-              ? "The custom provider responded, but not in the OpenAI chat format — expected choices[0].message.content (string or text parts). Verify the endpoint is OpenAI-compatible."
-              : "The model returned an unreadable response — try again.",
-        },
-        { status: 502 },
-      );
+      // Diagnose WHY no answer text arrived:
+      // - timeout abort -> the model was still generating when our budget
+      //   expired (thinking models scale reasoning time with card count).
+      // - reasoning without content + finish_reason "length" -> the thinking
+      //   model exhausted the token budget mid-reasoning.
+      // - reasoning without content otherwise -> the model thought but never
+      //   answered (some gateway reasoning models emit only reasoning).
+      // - no reasoning at all -> dialect mismatch.
+      let error: string;
+      if (streamAborted) {
+        error =
+          provider === "custom"
+            ? "The model was still generating when the 5-minute budget ran out (thinking models reason longer for more cards). Draft fewer cards — or try a faster non-reasoning model."
+            : "The model took too long to respond — try fewer cards or a faster model.";
+      } else if (streamReasoningChars > 0 && streamFinishReason === "length") {
+        error =
+          "The model spent its entire output budget on reasoning and never answered. Try a non-reasoning model (or one with a smaller thinking budget) — reasoning models like GLM think before replying.";
+      } else if (streamReasoningChars > 0) {
+        error =
+          "The model produced reasoning but no answer text. Try a non-reasoning model, or a model/endpoint that returns delta.content.";
+      } else if (streamFinishReason === "content_filter") {
+        error = "The provider blocked the response (content filter) — try different code or a different model.";
+      } else {
+        error =
+          provider === "custom"
+            ? "The custom provider responded, but not in the OpenAI chat format — expected choices[0].message.content (string or text parts). Verify the endpoint is OpenAI-compatible."
+            : "The model returned an unreadable response — try again.";
+      }
+      return NextResponse.json({ error: redactSecrets(error) }, { status: 504 });
     }
 
     const drafts = parseDraftCards(text);
@@ -293,7 +325,7 @@ export async function POST(req: NextRequest) {
     if (aborted) {
       error =
         provider === "custom"
-          ? "The custom provider took over 2.5 minutes — free-tier models can queue. Try a faster model or retry."
+          ? "The custom provider hit the 5-minute budget — free-tier/thinking models can be slow. Draft fewer cards or pick a faster model."
           : `${label} took over 30 seconds to respond — try a faster model or check the server.`;
     } else if (cause?.code === "ENOTFOUND" || cause?.code === "EAI_AGAIN") {
       error = `${label} host could not be resolved — check the base URL for typos.`;

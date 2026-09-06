@@ -27,8 +27,8 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   gemini: {
     id: "gemini",
     label: "Google Gemini",
-    model: "gemini-3.0-flash",
-    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent",
+    model: "gemini-3.8-flash",
+    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
     keyHint: "AIza… (from aistudio.google.com)",
   },
   anthropic: {
@@ -80,7 +80,12 @@ export function isValidKeyShape(raw: unknown): raw is string {
 }
 
 // Generation caps: quiz cards are small; a huge completion is a runaway.
+// Custom providers get a much bigger budget — thinking/reasoning models
+// (GLM, DeepSeek-R1, o1-style) burn hundreds-to-thousands of tokens on
+// reasoning_content before emitting any answer text, and a tight cap
+// truncates the stream mid-thought.
 const MAX_OUTPUT_TOKENS = 2000;
+const MAX_OUTPUT_TOKENS_CUSTOM = 16_000;
 const TEMPERATURE = 0.4;
 
 // ---------- Custom provider (OpenAI-compatible endpoint) ----------
@@ -179,7 +184,9 @@ export function buildRequest(
           { role: "user", content: messages.user },
         ],
         temperature: TEMPERATURE,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        // Thinking models burn most of this budget on reasoning_content
+        // before the answer starts — see MAX_OUTPUT_TOKENS_CUSTOM.
+        max_tokens: MAX_OUTPUT_TOKENS_CUSTOM,
         stream: true,
         stream_options: { include_usage: true },
       }),
