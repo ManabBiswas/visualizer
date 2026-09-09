@@ -9,6 +9,7 @@ import { useTheme } from "@/lib/theme";
 import { attachSvgTooltips, type TooltipMap } from "@/lib/flowchart/tooltips";
 import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
 import { useArrowAnimation } from "@/lib/animation";
+import { toast } from "@/components/Toast";
 
 export function CallGraphPanel({
   diagram,
@@ -30,7 +31,6 @@ export function CallGraphPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const rawId = useId();
@@ -97,28 +97,26 @@ export function CallGraphPanel({
   }
 
   async function exportPng() {
-    setExportError(null);
     setExporting(true);
     try {
       const svg = await buildLightSvg();
       if (!svg) throw new Error("Could not render the diagram.");
       await downloadPng(svg, name ?? "callgraph", "#ffffff");
     } catch (e) {
-      setExportError(`PNG export failed: ${(e as Error).message}`);
+      toast.error(`PNG export failed: ${(e as Error).message}`);
     } finally {
       setExporting(false);
     }
   }
 
   async function exportSvg() {
-    setExportError(null);
     setExporting(true);
     try {
       const svg = await buildLightSvg();
       if (!svg) throw new Error("Could not render the diagram.");
       downloadSvg(svg, name ?? "callgraph");
     } catch (e) {
-      setExportError(`SVG export failed: ${(e as Error).message}`);
+      toast.error(`SVG export failed: ${(e as Error).message}`);
     } finally {
       setExporting(false);
     }
@@ -141,7 +139,6 @@ export function CallGraphPanel({
       <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
         <span className="label-caps">Call graph — click a method to open its flowchart</span>
         <div className="flex items-center gap-2">
-          {exportError && <span className="text-code-sm text-error">{exportError}</span>}
           <button
             onClick={toggle}
             aria-pressed={animated}

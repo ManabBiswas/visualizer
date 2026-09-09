@@ -19,6 +19,7 @@ import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
 import { CommentTag, MethodIR } from "@/lib/ir";
 import { isValidId } from "@/lib/security/validate";
+import { toast } from "@/components/Toast";
 
 const EXAMPLE = `class Solution {
     // why: binary search halves the search space each iteration
@@ -81,7 +82,6 @@ function EditorPage() {
   const [savedProblemId, setSavedProblemId] = useState<string | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   // Source line the editor cursor is parked on. Drives the "pulsing node"
   // highlight on the flowchart (the bidirectional code↔diagram link).
@@ -165,8 +165,10 @@ function EditorPage() {
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
       setSaveWarning(data.saveWarning ?? null);
+      if (data.savedProblemId) toast.success(`Saved to log: ${meta.name}`);
     } catch (e) {
       setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -197,7 +199,6 @@ function EditorPage() {
   async function downloadReport() {
     if (!current) return;
     setReporting(true);
-    setReportError(null);
     try {
       // Lazy-load the report generator so jspdf/mermaid stay out of the
       // initial bundle and are only fetched when a report is requested.
@@ -213,7 +214,7 @@ function EditorPage() {
         blockComplexity: current.blockComplexity,
       });
     } catch (e) {
-      setReportError(`PDF export failed: ${(e as Error).message}`);
+      toast.error(`PDF export failed: ${(e as Error).message}`);
     } finally {
       setReporting(false);
     }
@@ -302,9 +303,9 @@ function EditorPage() {
               )}
             </div>
           )}
-          {(error || reportError) && (
+          {error && (
             <div className="shrink-0 border-t border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
-              {error ?? reportError}
+              {error}
             </div>
           )}
         </div>

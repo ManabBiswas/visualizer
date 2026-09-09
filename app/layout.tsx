@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { TopNav } from "@/components/TopNav";
 import { Providers } from "@/components/Providers";
+import { ToastViewport } from "@/components/Toast";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono" });
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <TopNav />
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
           </div>
+          <ToastViewport />
         </Providers>
       </body>
     </html>

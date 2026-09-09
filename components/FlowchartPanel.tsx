@@ -8,6 +8,7 @@ import { generateFlowchartWithTooltips, FLOWCHART_LEGEND } from "@/lib/flowchart
 import { attachSvgTooltips, highlightNode } from "@/lib/flowchart/tooltips";
 import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
 import { useArrowAnimation } from "@/lib/animation";
+import { toast } from "@/components/Toast";
 import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import type { MethodIR } from "@/lib/ir";
@@ -35,7 +36,6 @@ export function FlowchartPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const name = method?.name;
@@ -124,28 +124,26 @@ export function FlowchartPanel({
   }
 
   async function exportPng() {
-    setExportError(null);
     setExporting(true);
     try {
       const svg = await buildLightSvg();
       if (!svg) throw new Error("Could not render the diagram.");
       await downloadPng(svg, `${name ?? "flowchart"}-flowchart`, "#ffffff");
     } catch (e) {
-      setExportError(`PNG export failed: ${(e as Error).message}`);
+      toast.error(`PNG export failed: ${(e as Error).message}`);
     } finally {
       setExporting(false);
     }
   }
 
   async function exportSvg() {
-    setExportError(null);
     setExporting(true);
     try {
       const svg = await buildLightSvg();
       if (!svg) throw new Error("Could not render the diagram.");
       downloadSvg(svg, `${name ?? "flowchart"}-flowchart`);
     } catch (e) {
-      setExportError(`SVG export failed: ${(e as Error).message}`);
+      toast.error(`SVG export failed: ${(e as Error).message}`);
     } finally {
       setExporting(false);
     }
@@ -173,11 +171,6 @@ export function FlowchartPanel({
           })()}
         </span>
         <div className="flex items-center gap-2">
-          {exportError && (
-            <span className="text-code-sm text-error" title={exportError}>
-              {exportError}
-            </span>
-          )}
           <button
             onClick={toggle}
             aria-pressed={animated}

@@ -8,6 +8,7 @@ import { logToMarkdown, logToCsv, LogExportRow } from "@/lib/export/log";
 import { downloadText } from "@/lib/export/download";
 import { isSafeHttpUrl } from "@/lib/security/validate";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { toast } from "@/components/Toast";
 
 type ProblemRow = {
   id: string;
@@ -82,11 +83,10 @@ export default function LogPage() {
   }
 
   // --- Share links ---
-  // Per-row share state: the slug once created (local copy of the row's
-  // share_slug), plus transient copy feedback. Slugs are capability URLs —
-  // POST is idempotent (re-sharing returns the same slug), DELETE revokes.
-  const [shareNotice, setShareNotice] = useState<string | null>(null);
-
+  // Per-row share state: the slug once created (a local copy of the row's
+  // share_slug) so the UI can show the live link. Transient feedback
+  // (copied / revoked / failed) goes through toasts; the clipboard fallback
+  // keeps the link recoverable even when the API is unavailable.
   async function shareProblem(id: string) {
     try {
       const res = await fetch(`/api/problems/${encodeURIComponent(id)}/share`, { method: "POST" });
@@ -95,17 +95,15 @@ export default function LogPage() {
       setProblems((ps) => ps.map((p) => (p.id === id ? { ...p, share_slug: d.slug! } : p)));
       const url = `${window.location.origin}/p/${d.slug}`;
       // Clipboard API can be unavailable in embedded contexts; fall back to
-      // a transient notice either way so the link is always recoverable.
+      // a recoverable toast either way so the link is always shown.
       try {
         await navigator.clipboard.writeText(url);
-        setShareNotice(`Link copied: ${url}`);
+        toast.success(`Link copied: ${url}`, { duration: 6000 });
       } catch {
-        setShareNotice(`Share link: ${url}`);
+        toast.success(`Share link: ${url}`, { duration: 6000 });
       }
-      setTimeout(() => setShareNotice(null), 6000);
     } catch (e) {
-      setShareNotice((e as Error).message);
-      setTimeout(() => setShareNotice(null), 6000);
+      toast.error((e as Error).message);
     }
   }
 
@@ -114,11 +112,9 @@ export default function LogPage() {
       const res = await fetch(`/api/problems/${encodeURIComponent(id)}/share`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error ?? "Revoke failed.");
       setProblems((ps) => ps.map((p) => (p.id === id ? { ...p, share_slug: null } : p)));
-      setShareNotice("Share link revoked — the page now 404s.");
-      setTimeout(() => setShareNotice(null), 6000);
+      toast.success("Share link revoked — the page now 404s.");
     } catch (e) {
-      setShareNotice((e as Error).message);
-      setTimeout(() => setShareNotice(null), 6000);
+      toast.error((e as Error).message);
     }
   }
 
@@ -175,12 +171,6 @@ export default function LogPage() {
           </button>
         </div>
       </div>
-
-      {shareNotice && (
-        <div className="mb-3 flex items-center gap-2 rounded border border-panel-border bg-surface-container px-3 py-2 text-body-sm text-on-surface">
-          <span className="min-w-0 flex-1 truncate">{shareNotice}</span>
-        </div>
-      )}
 
       {status === "unauthenticated" ? (
         <SignInPrompt
