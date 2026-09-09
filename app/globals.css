@@ -227,6 +227,17 @@
   50%      { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--color-primary) 90%, transparent)); }
 }
 
+/* Traveling dots on diagram edges (flowchart + call graph): one small
+   circle per edge path, animated along the path by SMIL animateMotion
+   (injected by lib/flowchart/edgeAnim after mermaid renders). Scoped to
+   .cl-edge-dots on the SVG root — added only when dots are present, so
+   exports (fresh SVGs) and reduced-motion users see plain arrows. */
+.cl-diagram svg.cl-edge-dots .cl-edge-dot circle {
+  fill: var(--color-primary);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-primary) 45%, transparent));
+}
+
 /* In Tailwind v4, custom component classes use @utility instead of @layer components */
 @utility panel {
   @apply bg-surface-container-low border border-panel-border;

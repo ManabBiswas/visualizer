@@ -7,6 +7,8 @@ import { PanZoom } from "./PanZoom";
 import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import { attachSvgTooltips, type TooltipMap } from "@/lib/flowchart/tooltips";
+import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
+import { useArrowAnimation } from "@/lib/animation";
 
 export function CallGraphPanel({
   diagram,
@@ -24,6 +26,7 @@ export function CallGraphPanel({
   onMethodClick: (methodName: string) => void;
 }) {
   const { theme } = useTheme();
+  const { animated, toggle } = useArrowAnimation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
@@ -68,11 +71,21 @@ export function CallGraphPanel({
             const map: TooltipMap = new Map(Object.entries(tooltips));
             attachSvgTooltips(svgEl as SVGSVGElement, map);
           }
+          if (svgEl && animated) attachEdgeDots(svgEl as SVGSVGElement);
           setRendered(true);
         }
       })
       .catch((e) => setError(String(e)));
-  }, [scopedDiagram, theme, tooltips]);
+  }, [scopedDiagram, theme, tooltips, animated]);
+
+  // Toggle dots on/off without re-rendering mermaid.
+  useEffect(() => {
+    if (!rendered) return;
+    const svgEl = containerRef.current?.querySelector("svg");
+    if (!svgEl) return;
+    if (animated) attachEdgeDots(svgEl as SVGSVGElement);
+    else detachEdgeDots(svgEl as SVGSVGElement);
+  }, [animated, rendered]);
 
   // Exports are always light.
   async function buildLightSvg(): Promise<SVGSVGElement | null> {
@@ -129,6 +142,14 @@ export function CallGraphPanel({
         <span className="label-caps">Call graph — click a method to open its flowchart</span>
         <div className="flex items-center gap-2">
           {exportError && <span className="text-code-sm text-error">{exportError}</span>}
+          <button
+            onClick={toggle}
+            aria-pressed={animated}
+            className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary"
+            title="Toggle animated flow arrows on the graph (a traveling dot per edge)"
+          >
+            {animated ? "Flows: on" : "Flows: off"}
+          </button>
           <button
             disabled={!rendered || exporting}
             onClick={exportPng}

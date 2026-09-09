@@ -6,6 +6,8 @@ import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
 import { PanZoom } from "./PanZoom";
 import { generateFlowchartWithTooltips, FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
 import { attachSvgTooltips, highlightNode } from "@/lib/flowchart/tooltips";
+import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
+import { useArrowAnimation } from "@/lib/animation";
 import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import type { MethodIR } from "@/lib/ir";
@@ -29,6 +31,7 @@ export function FlowchartPanel({
   activeLine?: number | null;
 }) {
   const { theme } = useTheme();
+  const { animated, toggle } = useArrowAnimation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
@@ -83,12 +86,23 @@ export function FlowchartPanel({
           if (svgEl) {
             attachSvgTooltips(svgEl as SVGSVGElement, scoped?.tooltips ?? new Map());
             highlightNode(svgEl as SVGSVGElement, activeNodeId);
+            if (animated) attachEdgeDots(svgEl as SVGSVGElement);
           }
           setRendered(true);
         }
       })
       .catch((e) => setError(String(e)));
-  }, [scopedDiagram, scoped, theme, activeNodeId]);
+  }, [scopedDiagram, scoped, theme, activeNodeId, animated]);
+
+  // Toggle dots on/off without a full mermaid re-render (expensive) — just
+  // add/remove them on the already-rendered SVG.
+  useEffect(() => {
+    if (!rendered) return;
+    const svgEl = containerRef.current?.querySelector("svg");
+    if (!svgEl) return;
+    if (animated) attachEdgeDots(svgEl as SVGSVGElement);
+    else detachEdgeDots(svgEl as SVGSVGElement);
+  }, [animated, rendered]);
 
   // Re-apply the active highlight when the editor cursor moves to a different
   // line that maps to a different node (mermaid didn't re-render — cheap).
@@ -164,6 +178,14 @@ export function FlowchartPanel({
               {exportError}
             </span>
           )}
+          <button
+            onClick={toggle}
+            aria-pressed={animated}
+            className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary"
+            title="Toggle animated flow arrows on the diagram (a traveling dot per edge)"
+          >
+            {animated ? "Flows: on" : "Flows: off"}
+          </button>
           <button
             disabled={!rendered || exporting}
             onClick={exportPng}
