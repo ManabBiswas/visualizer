@@ -13,11 +13,13 @@ import { RunConsole } from "@/components/RunConsole";
 import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
 import { SamplePicker } from "@/components/SamplePicker";
+import { AiQuizDrawer } from "@/components/AiQuizDrawer";
 import { SAMPLES, findSample, type Sample } from "@/data/samples";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
 import { CommentTag, MethodIR } from "@/lib/ir";
 import { isValidId } from "@/lib/security/validate";
+import { toast } from "@/components/Toast";
 
 const EXAMPLE = `class Solution {
     // why: binary search halves the search space each iteration
@@ -80,7 +82,6 @@ function EditorPage() {
   const [savedProblemId, setSavedProblemId] = useState<string | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   // Source line the editor cursor is parked on. Drives the "pulsing node"
   // highlight on the flowchart (the bidirectional code↔diagram link).
@@ -88,6 +89,10 @@ function EditorPage() {
   // Sample picker visibility. Opens by default on a fresh visit (cold start),
   // stays closed when deep-linking (?sample=) or editing a saved problem.
   const [sampleOpen, setSampleOpen] = useState(true);
+  // BYO-key AI quiz-drafting drawer (Notes tab). Only meaningful for saved
+  // problems — the endpoint loads the problem + IR owner-scoped.
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const editorRef = useRef<CodeEditorHandle | null>(null);
 
   // Clear a stale save warning when navigating to a different problem
@@ -139,7 +144,12 @@ function EditorPage() {
     setActiveLine(line);
   }
 
-  async function analyze(source: string = code) {
+  // Takes meta explicitly: loadSample() calls this in the same tick as
+  // setMeta(), so reading the `meta` state here would see the PREVIOUS
+  // problem's meta and upsert the sample under the old name — destroying the
+  // old problem's analyses/notes (the server upserts by name).
+  async function analyze(source: string = code, metaOverride?: ProblemMeta) {
+    const effectiveMeta = metaOverride ?? meta;
     setLoading(true);
     setError(null);
     try {
@@ -148,7 +158,7 @@ function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           source,
-          problem: meta.name ? meta : undefined,
+          problem: effectiveMeta.name ? effectiveMeta : undefined,
         }),
       });
       const data = await res.json();
@@ -160,8 +170,10 @@ function EditorPage() {
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
       setSaveWarning(data.saveWarning ?? null);
+      if (data.savedProblemId) toast.success(`Saved to log: ${effectiveMeta.name}`);
     } catch (e) {
       setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -169,13 +181,14 @@ function EditorPage() {
 
   /** Load one of the curated samples: fill editor + meta, then analyze it. */
   function loadSample(sample: Sample) {
-    setCode(sample.source);
-    setMeta({
+    const sampleMeta: ProblemMeta = {
       name: sample.name,
       link: sample.link,
       topicTags: [...sample.topicTags],
       difficulty: sample.difficulty,
-    });
+    };
+    setCode(sample.source);
+    setMeta(sampleMeta);
     setResults([]);
     setCallGraph(null);
     setCallGraphLight(null);
@@ -184,7 +197,7 @@ function EditorPage() {
     setSaveWarning(null);
     setError(null);
     setSampleOpen(false);
-    void analyze(sample.source);
+    void analyze(sample.source, sampleMeta);
   }
 
   const current = results[activeMethod];
@@ -192,7 +205,6 @@ function EditorPage() {
   async function downloadReport() {
     if (!current) return;
     setReporting(true);
-    setReportError(null);
     try {
       // Lazy-load the report generator so jspdf/mermaid stay out of the
       // initial bundle and are only fetched when a report is requested.
@@ -208,7 +220,7 @@ function EditorPage() {
         blockComplexity: current.blockComplexity,
       });
     } catch (e) {
-      setReportError(`PDF export failed: ${(e as Error).message}`);
+      toast.error(`PDF export failed: ${(e as Error).message}`);
     } finally {
       setReporting(false);
     }
@@ -297,9 +309,9 @@ function EditorPage() {
               )}
             </div>
           )}
-          {(error || reportError) && (
+          {error && (
             <div className="shrink-0 border-t border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
-              {error ?? reportError}
+              {error}
             </div>
           )}
         </div>
@@ -383,6 +395,41 @@ function EditorPage() {
                   >
                     Quiz these notes
                   </Link>
+                )}
+                {savedProblemId && (
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setAiOpen((o) => !o);
+                        setAiNotice(null);
+                      }}
+                      className={`self-start rounded border px-3 py-1 text-body-sm font-medium ${
+                        aiOpen
+                          ? "border-primary text-primary"
+                          : "border-panel-border text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                      }`}
+                      title="Optional: draft quiz cards with your own AI provider key — drafts are reviewed before they enter the deck"
+                    >
+                      {aiOpen ? "Close AI drafting" : "Draft quiz cards with AI…"}
+                    </button>
+                    {aiOpen && (
+                      <AiQuizDrawer
+                        problemId={savedProblemId}
+                        problemName={meta.name || "this problem"}
+                        onClose={() => setAiOpen(false)}
+                        onAccepted={(n) =>
+                          setAiNotice(
+                            n === 1
+                              ? "Card added to this problem's deck."
+                              : `${n} cards added to this problem's deck.`,
+                          )
+                        }
+                      />
+                    )}
+                    {aiNotice && (
+                      <span className="text-body-sm text-success">{aiNotice}</span>
+                    )}
+                  </div>
                 )}
                 {!current || current.method.comments.length === 0 ? (
                   <div className="text-body-sm text-text-muted">

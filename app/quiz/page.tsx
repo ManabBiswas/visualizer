@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
@@ -8,6 +8,7 @@ import { Grade } from "@/lib/spaced/repetition";
 import { cardsToAnkiTxt } from "@/lib/export/anki";
 import { downloadText } from "@/lib/export/download";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { toast } from "@/components/Toast";
 
 type QuizCard = {
   id: string;
@@ -25,6 +26,19 @@ type QuizCard = {
     lastReviewed: string | null;
   } | null;
   due: boolean;
+  lapseCount: number;
+  source: "user" | "ai";
+};
+
+// Deck views: all cards, only due ones, or the mistake journal (cards
+// lapsed >= MISTAKE_THRESHOLD times — mirrors the API's threshold).
+type DeckView = "all" | "due" | "mistakes";
+const MISTAKE_THRESHOLD = 3;
+
+const VIEW_LABELS: Record<DeckView, string> = {
+  all: "All",
+  due: "Due",
+  mistakes: "Mistakes",
 };
 
 function QuizPage() {
@@ -35,14 +49,25 @@ function QuizPage() {
   const [allCards, setAllCards] = useState<QuizCard[]>([]);
   const [queue, setQueue] = useState<QuizCard[]>([]);
   const [topicFilter, setTopicFilter] = useState("");
-  const [dueOnly, setDueOnly] = useState(true);
+  const [view, setView] = useState<DeckView>("due");
+  // When set, a focus session is active: the banner lists the drilled topics
+  // and the queue came from /api/quiz?focus=weakest instead of the filters.
+  const [focusTopics, setFocusTopics] = useState<string[] | null>(null);
+  const [focusLoading, setFocusLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
   const [answerDraft, setAnswerDraft] = useState("");
   const [savingAnswer, setSavingAnswer] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  // Monotonic sequence for deck loads — a response only applies if it is
+  // still the latest request (see loadCards).
+  const loadSeq = useRef(0);
 
+  // loadCards is called on mount and on every filter/view change; a cancelled
+  // flag keeps a slow older response from overwriting a newer one (fetch
+  // order isn't guaranteed), and res.ok turns API errors into a visible
+  // message instead of a silently empty deck.
   const loadCards = useCallback(() => {
     // Quiz cards are per-account; skip the doomed 401 request when
     // signed out — the SignInPrompt covers that case instead.
@@ -50,21 +75,61 @@ function QuizPage() {
     const params = new URLSearchParams();
     if (topicFilter) params.set("topic", topicFilter);
     if (problemFilter) params.set("problem", problemFilter);
-    if (dueOnly) params.set("due", "1");
+    if (view === "due") params.set("due", "1");
+    if (view === "mistakes") params.set("mistakes", "1");
+    const run = ++loadSeq.current;
     fetch(`/api/quiz?${params}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error ?? "Could not load your quiz deck.");
+        return d as { cards?: QuizCard[] };
+      })
       .then((d) => {
+        if (run !== loadSeq.current) return; // a newer load superseded this one
         setAllCards(d.cards ?? []);
         setQueue(d.cards ?? []);
         setReviewed(0);
+        setNotice(null);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [topicFilter, problemFilter, dueOnly, status]);
+      .catch((e) => {
+        if (run !== loadSeq.current) return;
+        setAllCards([]);
+        setQueue([]);
+        setNotice((e as Error).message);
+        setLoading(false);
+      });
+  }, [topicFilter, problemFilter, view, status]);
 
   useEffect(() => {
     loadCards();
   }, [loadCards]);
+
+  async function startFocusSession() {
+    setFocusLoading(true);
+    try {
+      const res = await fetch("/api/quiz?focus=weakest");
+      const d: { cards?: QuizCard[]; focus?: string[]; error?: string } = await res
+        .json()
+        .catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Could not build a focus session.");
+      setQueue(d.cards ?? []);
+      setFocusTopics(d.focus ?? []);
+      setReviewed(0);
+      setNotice(null);
+      setLoading(false);
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setFocusLoading(false);
+    }
+  }
+
+  function exitFocusSession() {
+    setFocusTopics(null);
+    setLoading(true);
+    loadCards();
+  }
 
   const current = queue[0];
 
@@ -98,13 +163,16 @@ function QuizPage() {
         body: JSON.stringify({ noteId: card.id, grade: g }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Review failed.");
+      const d: { lapseCount?: number } = await res.json();
+      const lapseCount = d.lapseCount ?? card.lapseCount;
       setReviewed((n) => n + 1);
       setQueue((q) => {
         const rest = q.slice(1);
-        return g === "again" ? [...rest, { ...card, due: true }] : rest;
+        return g === "again" ? [...rest, { ...card, due: true, lapseCount }] : rest;
       });
+      setAllCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, lapseCount } : c)));
     } catch (e) {
-      setNotice((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 
@@ -119,10 +187,9 @@ function QuizPage() {
       if (!res.ok) throw new Error((await res.json()).error ?? "Save failed.");
       setQueue((q) => q.map((c) => (c.id === card.id ? { ...c, answer: answerDraft.trim() || null } : c)));
       setAllCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, answer: answerDraft.trim() || null } : c)));
-      setNotice("Answer saved.");
-      setTimeout(() => setNotice(null), 2000);
+      toast.success("Answer saved.");
     } catch (e) {
-      setNotice((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSavingAnswer(false);
     }
@@ -147,10 +214,13 @@ function QuizPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <select
+          {!focusTopics && (
+            <>
+              <select
             value={topicFilter}
             onChange={(e) => {
               setTopicFilter(e.target.value);
+              setFocusTopics(null);
               setLoading(true);
             }}
             className="rounded bg-surface-container-high px-2 py-1 text-body-sm text-on-surface"
@@ -163,17 +233,47 @@ function QuizPage() {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 text-body-sm text-on-surface-variant">
-            <input
-              type="checkbox"
-              checked={dueOnly}
-              onChange={(e) => {
-                setDueOnly(e.target.checked);
-                setLoading(true);
-              }}
-            />
-            due only
-          </label>
+          <div
+            className="flex overflow-hidden rounded border border-panel-border"
+            role="group"
+            aria-label="Deck view"
+          >
+            {(Object.keys(VIEW_LABELS) as DeckView[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => {
+                  if (v === view) return;
+                  setView(v);
+                  setFocusTopics(null);
+                  setLoading(true);
+                }}
+                className={`px-3 py-1 text-body-sm font-medium ${
+                  v === view
+                    ? "bg-primary-container text-on-primary-container"
+                    : "bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                }`}
+                title={
+                  v === "mistakes"
+                    ? `Cards you graded "again" ${MISTAKE_THRESHOLD}+ times — review what you keep failing`
+                    : v === "due"
+                      ? "Cards scheduled for today"
+                      : "Every card in this topic/problem scope"
+                }
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+            </>
+          )}
+          <button
+            disabled={focusLoading || allCards.length === 0}
+            onClick={startFocusSession}
+            className="rounded bg-primary-container px-2 py-1 text-body-sm font-medium text-on-primary-container hover:opacity-90 disabled:opacity-40"
+            title="Drill up to 10 cards from your weakest topics (lowest average ease)"
+          >
+            {focusLoading && focusTopics === null ? "Building…" : "Focus session"}
+          </button>
           <button
             disabled={allCards.length === 0}
             onClick={exportAnki}
@@ -186,6 +286,23 @@ function QuizPage() {
       </div>
 
       {notice && <div className="mb-3 rounded border border-panel-border bg-surface-container px-3 py-2 text-body-sm text-on-surface">{notice}</div>}
+
+      {focusTopics && (
+        <div className="mb-3 flex items-center gap-3 rounded border border-primary/40 bg-primary/10 px-3 py-2 text-body-sm text-on-surface">
+          <span className="min-w-0 flex-1">
+            Focus session — drilling your weakest topics:{" "}
+            <span className="font-medium text-primary">
+              {focusTopics.length > 0 ? focusTopics.join(", ") : "your untagged cards"}
+            </span>
+          </span>
+          <button
+            onClick={exitFocusSession}
+            className="shrink-0 rounded border border-panel-border px-2 py-0.5 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+          >
+            Exit session
+          </button>
+        </div>
+      )}
 
       {status === "unauthenticated" ? (
         <SignInPrompt
@@ -202,10 +319,10 @@ function QuizPage() {
             Add <code className="font-mono text-code-sm text-primary">{"// q: your question"}</code> comments to your
             solutions and analyze them — every question becomes a revision card here.
           </p>
-          {dueOnly && allCards.length === 0 && (
+          {view === "due" && allCards.length === 0 && (
             <button
               onClick={() => {
-                setDueOnly(false);
+                setView("all");
                 setLoading(true);
               }}
               className="rounded bg-surface-container-high px-2 py-1 text-on-surface hover:text-primary"
@@ -213,15 +330,43 @@ function QuizPage() {
               Show all cards anyway
             </button>
           )}
+          {view === "mistakes" && (
+            <p className="text-body-sm text-on-surface-variant">
+              Cards land here after {MISTAKE_THRESHOLD} &quot;again&quot; grades — they stay until you
+              break the pattern.
+            </p>
+          )}
         </div>
       ) : (
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
           <div className="flex items-center justify-between text-code-sm text-text-muted">
-            <span>
-              {current.problemName}
-              {current.topics.length > 0 && ` · ${current.topics.join(", ")}`}
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">
+                {current.problemName}
+                {current.topics.length > 0 && ` · ${current.topics.join(", ")}`}
+              </span>
+              {current.lapseCount >= 1 && (
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono ${
+                    current.lapseCount >= MISTAKE_THRESHOLD
+                      ? "bg-error/15 text-error"
+                      : "bg-surface-container-high text-text-muted"
+                  }`}
+                  title={`You have graded this card "again" ${current.lapseCount} time${current.lapseCount === 1 ? "" : "s"}`}
+                >
+                  lapsed {current.lapseCount}×
+                </span>
+              )}
+              {current.source === "ai" && (
+                <span
+                  className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-code-sm text-primary"
+                  title="Accepted from an AI-drafted suggestion — provenance kept for transparency"
+                >
+                  AI
+                </span>
+              )}
             </span>
-            <span>{queue.length} left</span>
+            <span className="shrink-0">{queue.length} left</span>
           </div>
 
           <div className="rounded-md border border-primary/40 bg-surface-container p-4">

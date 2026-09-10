@@ -66,10 +66,14 @@ export function PanZoom({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // When a new diagram is injected: load at 100% (1:1) anchored at the padding
+  // When a NEW diagram is injected: load at 100% (1:1) anchored at the padding
   // offset. Users can hit "Fit" if they want the whole diagram on screen.
   // We previously auto-fit overflowing diagrams, but a shrunken flowchart
   // reads worse than a pannable one — power users have a Fit button.
+  //
+  // Only direct-child mutations count: subtree:true would fire for the
+  // panel's own DOM passes (tooltips, animated edge dots) and throw away
+  // the user's pan/zoom on every toggle.
   useEffect(() => {
     const content = contentRef.current;
     if (!content) return;
@@ -80,7 +84,14 @@ export function PanZoom({ children }: { children: ReactNode }) {
         setView({ x: 24, y: 24, k: 1 });
       }, 30);
     };
-    const observer = new MutationObserver(reset);
+    const observer = new MutationObserver((mutations) => {
+      // Ignore the panel's post-render injections (title/dot elements added
+      // inside the svg); only react to the svg itself being swapped.
+      const swapped = mutations.some(
+        (m) => m.target === content || Array.from(m.addedNodes).some((n) => (n as Element).tagName === "svg"),
+      );
+      if (swapped) reset();
+    });
     observer.observe(content, { childList: true, subtree: true });
     return () => {
       observer.disconnect();

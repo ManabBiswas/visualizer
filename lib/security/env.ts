@@ -27,11 +27,6 @@ export function assertRequiredEnv(): void {
   }
 }
 
-/**
- * Redacts anything that looks like a secret value from a message before it is
- * logged or returned to a client. Matches the exact values of known secret
- * env vars, not patterns — safer against false positives.
- */
 export function redactSecrets(message: string): string {
   let redacted = message;
   for (const key of SECRET_ENV_KEYS) {

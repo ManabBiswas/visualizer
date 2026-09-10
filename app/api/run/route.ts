@@ -15,6 +15,13 @@ function clientIp(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
+  if (process.env.NEXT_PUBLIC_ENABLE_RUN !== "1") {
+    return NextResponse.json(
+      { error: "The run console is disabled on this deployment." },
+      { status: 501 },
+    );
+  }
+
   // The runner executes arbitrary user code, so it is behind the login wall.
   const userId = await getAuthedUserId();
   if (!userId) {

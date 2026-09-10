@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
 import { logToMarkdown, logToCsv, LogExportRow } from "@/lib/export/log";
 import { downloadText } from "@/lib/export/download";
 import { isSafeHttpUrl } from "@/lib/security/validate";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { toast } from "@/components/Toast";
 
 type ProblemRow = {
   id: string;
@@ -19,6 +21,7 @@ type ProblemRow = {
   space_complexity: string | null;
   note_count: number;
   created_at: string;
+  share_slug: string | null;
 };
 
 const DIFFICULTY_COLOR: Record<string, string> = {
@@ -35,6 +38,15 @@ function parseTopics(raw: string | null): string[] {
   }
 }
 
+// created_at rows may be legacy "YYYY-MM-DD HH:MM:SS" (UTC, space separator)
+// or ISO "YYYY-MM-DDTHH:MM:SS.sssZ" from the unified format. Parse both as
+// UTC so dates never shift by the viewer's timezone near midnight.
+function formatDate(raw: string): string {
+  const iso = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString();
+}
+
 export default function LogPage() {
   const router = useRouter();
   const { status } = useSession();
@@ -42,6 +54,7 @@ export default function LogPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     // The log is per-account; don't fire a doomed 401 request for
@@ -51,16 +64,31 @@ export default function LogPage() {
     const params = new URLSearchParams();
     if (topicFilter) params.set("topic", topicFilter);
     if (difficultyFilter) params.set("difficulty", difficultyFilter);
-    fetch(`/api/problems?${params}`)
-      .then((r) => r.json())
+    Promise.resolve()
+      .then(() => {
+        // Flip the loading flag in a callback (not synchronously in the
+        // effect body) to avoid cascading renders flagged by the compiler lint.
+        if (!cancelled) setLoading(true);
+        return fetch(`/api/problems?${params}`);
+      })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error ?? "Could not load your problem log.");
+        return d as { problems?: ProblemRow[] };
+      })
       .then((d) => {
         if (!cancelled) {
-          setProblems(d.problems);
+          setProblems(d.problems ?? []);
+          setLoadError(null);
           setLoading(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
+      .catch((e) => {
+        if (!cancelled) {
+          setProblems([]);
+          setLoadError((e as Error).message);
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -78,6 +106,42 @@ export default function LogPage() {
       note_count: p.note_count,
       created_at: p.created_at,
     }));
+  }
+
+  // --- Share links ---
+  // Per-row share state: the slug once created (a local copy of the row's
+  // share_slug) so the UI can show the live link. Transient feedback
+  // (copied / revoked / failed) goes through toasts; the clipboard fallback
+  // keeps the link recoverable even when the API is unavailable.
+  async function shareProblem(id: string) {
+    try {
+      const res = await fetch(`/api/problems/${encodeURIComponent(id)}/share`, { method: "POST" });
+      const d: { slug?: string; error?: string } = await res.json();
+      if (!res.ok || !d.slug) throw new Error(d.error ?? "Share failed.");
+      setProblems((ps) => ps.map((p) => (p.id === id ? { ...p, share_slug: d.slug! } : p)));
+      const url = `${window.location.origin}/p/${d.slug}`;
+      // Clipboard API can be unavailable in embedded contexts; fall back to
+      // a recoverable toast either way so the link is always shown.
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success(`Link copied: ${url}`, { duration: 6000 });
+      } catch {
+        toast.success(`Share link: ${url}`, { duration: 6000 });
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function revokeShare(id: string) {
+    try {
+      const res = await fetch(`/api/problems/${encodeURIComponent(id)}/share`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Revoke failed.");
+      setProblems((ps) => ps.map((p) => (p.id === id ? { ...p, share_slug: null } : p)));
+      toast.success("Share link revoked — the page now 404s.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
 
   return (
@@ -134,6 +198,12 @@ export default function LogPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="mb-3 rounded border border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
+          {loadError}
+        </div>
+      )}
+
       {status === "unauthenticated" ? (
         <SignInPrompt
           title="Sign in to see your problem log"
@@ -157,6 +227,7 @@ export default function LogPage() {
               <th className="py-2 font-medium">Space</th>
               <th className="py-2 font-medium">Notes</th>
               <th className="py-2 font-medium">Solved</th>
+              <th className="py-2 font-medium">Share</th>
             </tr>
           </thead>
           <tbody>
@@ -179,7 +250,15 @@ export default function LogPage() {
                       {p.name}
                     </a>
                   ) : (
-                    p.name
+                    // Keyboard-reachable link to open the problem (the row
+                    // click is a mouse-only convenience, this is the a11y path).
+                    <Link
+                      href={`/analyze?problem=${p.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-primary hover:underline"
+                    >
+                      {p.name}
+                    </Link>
                   )}
                 </td>
                 <td className="py-2 text-on-surface-variant">{parseTopics(p.topic_tags).join(", ")}</td>
@@ -187,7 +266,44 @@ export default function LogPage() {
                 <td className="py-2 font-mono text-code-sm text-on-surface">{p.time_complexity}</td>
                 <td className="py-2 font-mono text-code-sm text-on-surface">{p.space_complexity}</td>
                 <td className="py-2 text-on-surface-variant">{p.note_count}</td>
-                <td className="py-2 text-text-muted">{new Date(p.created_at).toLocaleDateString()}</td>
+                <td className="py-2 text-text-muted">{formatDate(p.created_at)}</td>
+                <td className="py-2">
+                  {p.share_slug ? (
+                    <span className="flex items-center gap-1">
+                      <a
+                        href={`/p/${p.share_slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded bg-surface-container-high px-1.5 py-0.5 text-code-sm text-primary hover:underline"
+                        title="Open the public share page"
+                      >
+                        Public ↗
+                      </a>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void revokeShare(p.id);
+                        }}
+                        className="rounded px-1.5 py-0.5 text-code-sm text-text-muted hover:text-error"
+                        title="Revoke the share link (the page will 404)"
+                      >
+                        Revoke
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void shareProblem(p.id);
+                      }}
+                      className="rounded px-1.5 py-0.5 text-code-sm text-text-muted hover:text-primary"
+                      title="Create a public read-only share link for this analysis"
+                    >
+                      Share
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

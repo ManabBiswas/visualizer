@@ -6,10 +6,7 @@
 const buckets = new Map<string, number[]>();
 const MAX_TRACKED_KEYS = 10_000;
 
-/**
- * Returns true when the key has exceeded `limit` calls within `windowMs`.
- * Records the call otherwise.
- */
+
 export function isRateLimited(key: string, limit: number, windowMs: number, now = Date.now()): boolean {
   const cutoff = now - windowMs;
   const hits = buckets.get(key) ?? [];

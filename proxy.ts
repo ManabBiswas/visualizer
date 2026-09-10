@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Monaco is loaded from jsDelivr by @monaco-editor/react and needs blob: workers;
-// Next.js dev tooling needs inline/eval scripts. Everything else is locked to 'self'.
+// Monaco is self-bundled (loader.config in CodeEditor) with same-origin blob
+// workers; Next.js dev tooling needs inline/eval scripts. In production the
+// eval allowance and third-party CDN entries are dropped entirely — inline
+// stays for the theme-bootstrap script in the layout.
+const isProd = process.env.NODE_ENV === "production";
+
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval' https://cdn.jsdelivr.net"}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' https://cdn.jsdelivr.net",
+  `connect-src 'self'${isProd ? "" : " https://cdn.jsdelivr.net"}`,
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
@@ -17,18 +21,25 @@ const CONTENT_SECURITY_POLICY = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-export function proxy(_req: NextRequest) {
-  const res = NextResponse.next();
-  res.headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
-  res.headers.set("X-Content-Type-Options", "nosniff");
-  res.headers.set("X-Frame-Options", "DENY");
-  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+const HEADERS: Record<string, string> = {
+  "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  // HTTPS-only for prod domains (Vercel adds its own; harmless duplicate,
+  // self-hosted deployments get it from here).
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   // Isolates the window from cross-origin openers (OAuth popup hardening).
   // X-XSS-Protection is explicitly disabled: the legacy auditor is itself
   // exploitable; modern browsers ignore it, older ones are safer without it.
-  res.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.headers.set("X-XSS-Protection", "0");
+  "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+  "X-XSS-Protection": "0",
+};
+
+export function proxy(_req: NextRequest) {
+  const res = NextResponse.next();
+  for (const [k, v] of Object.entries(HEADERS)) res.headers.set(k, v);
   return res;
 }
 

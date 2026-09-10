@@ -1,6 +1,6 @@
 {
   "name": "codelens",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "prepare:parser": "node scripts/prepare-parser.cjs",
@@ -21,7 +21,8 @@
     "next": "^16.2.11",
     "next-auth": "^5.0.0-beta.32",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-hot-toast": "^2.6.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

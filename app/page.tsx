@@ -1,6 +1,9 @@
 import Link from "next/link";
-import pkg from "../package.json";
 import { BackToTop } from "@/components/BackToTop";
+
+// Kept in sync with package.json by hand — importing the manifest ships the
+// whole package.json (deps, scripts) into the landing bundle for one string.
+const APP_VERSION = "0.4.0";
 
 const FEATURES = [
   {
@@ -202,7 +205,7 @@ export default function LandingPage() {
             <span className="font-mono text-code-sm text-text-muted">
               Java parsing · Mermaid diagrams · Monaco editor
             </span>
-            <span className="font-mono text-code-sm text-text-muted">v{pkg.version}</span>
+            <span className="font-mono text-code-sm text-text-muted">v{APP_VERSION}</span>
           </div>
         </div>
         <div className="border-t border-panel-border py-4">

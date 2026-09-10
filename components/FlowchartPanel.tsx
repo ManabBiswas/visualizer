@@ -6,6 +6,9 @@ import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
 import { PanZoom } from "./PanZoom";
 import { generateFlowchartWithTooltips, FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
 import { attachSvgTooltips, highlightNode } from "@/lib/flowchart/tooltips";
+import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
+import { useArrowAnimation } from "@/lib/animation";
+import { toast } from "@/components/Toast";
 import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import type { MethodIR } from "@/lib/ir";
@@ -29,10 +32,10 @@ export function FlowchartPanel({
   activeLine?: number | null;
 }) {
   const { theme } = useTheme();
+  const { animated, toggle } = useArrowAnimation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const name = method?.name;
@@ -67,28 +70,58 @@ export function FlowchartPanel({
     };
   }, [handlerName, onNodeHover]);
 
+  // Mermaid render ONLY on diagram/theme changes. Cursor moves (activeNodeId)
+  // and the arrow-anim toggle (animated) are handled by the cheap DOM-pass
+  // effects below — re-rendering mermaid on every keystroke would blank the
+  // panel and burn ~200ms per render. Both are read through refs so they
+  // stay out of the dependency array.
+  const renderSeq = useRef(0);
+  const activeNodeRef = useRef(activeNodeId);
+  const animatedRef = useRef(animated);
+  useEffect(() => {
+    activeNodeRef.current = activeNodeId;
+    animatedRef.current = animated;
+  }, [activeNodeId, animated]);
   useEffect(() => {
     if (!scopedDiagram || !containerRef.current) return;
     setError(null);
     setRendered(false);
     ensureMermaid(theme);
     const id = `flowchart-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const seq = ++renderSeq.current;
     mermaid
       .render(id, scopedDiagram)
       .then(({ svg }) => {
+        // Staleness guard: a newer render (method/theme switch) superseded
+        // this one — don't clobber the newer SVG with the older result.
+        if (seq !== renderSeq.current) return;
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
           // Native hover tooltips with the full untruncated node text.
           const svgEl = containerRef.current.querySelector("svg");
           if (svgEl) {
             attachSvgTooltips(svgEl as SVGSVGElement, scoped?.tooltips ?? new Map());
-            highlightNode(svgEl as SVGSVGElement, activeNodeId);
+            highlightNode(svgEl as SVGSVGElement, activeNodeRef.current);
+            if (animatedRef.current) attachEdgeDots(svgEl as SVGSVGElement);
           }
           setRendered(true);
         }
       })
-      .catch((e) => setError(String(e)));
-  }, [scopedDiagram, scoped, theme, activeNodeId]);
+      .catch((e) => {
+        if (seq !== renderSeq.current) return; // stale error — ignore
+        setError(String(e));
+      });
+  }, [scopedDiagram, scoped, theme]);
+
+  // Toggle dots on/off without a full mermaid re-render (expensive) — just
+  // add/remove them on the already-rendered SVG.
+  useEffect(() => {
+    if (!rendered) return;
+    const svgEl = containerRef.current?.querySelector("svg");
+    if (!svgEl) return;
+    if (animated) attachEdgeDots(svgEl as SVGSVGElement);
+    else detachEdgeDots(svgEl as SVGSVGElement);
+  }, [animated, rendered]);
 
   // Re-apply the active highlight when the editor cursor moves to a different
   // line that maps to a different node (mermaid didn't re-render — cheap).
@@ -110,28 +143,26 @@ export function FlowchartPanel({
   }
 
   async function exportPng() {
-    setExportError(null);
     setExporting(true);
     try {
       const svg = await buildLightSvg();
       if (!svg) throw new Error("Could not render the diagram.");
       await downloadPng(svg, `${name ?? "flowchart"}-flowchart`, "#ffffff");
     } catch (e) {
-      setExportError(`PNG export failed: ${(e as Error).message}`);
+      toast.error(`PNG export failed: ${(e as Error).message}`);
     } finally {
       setExporting(false);
     }
   }
 
   async function exportSvg() {
-    setExportError(null);
     setExporting(true);
     try {
       const svg = await buildLightSvg();
       if (!svg) throw new Error("Could not render the diagram.");
       downloadSvg(svg, `${name ?? "flowchart"}-flowchart`);
     } catch (e) {
-      setExportError(`SVG export failed: ${(e as Error).message}`);
+      toast.error(`SVG export failed: ${(e as Error).message}`);
     } finally {
       setExporting(false);
     }
@@ -159,11 +190,14 @@ export function FlowchartPanel({
           })()}
         </span>
         <div className="flex items-center gap-2">
-          {exportError && (
-            <span className="text-code-sm text-error" title={exportError}>
-              {exportError}
-            </span>
-          )}
+          <button
+            onClick={toggle}
+            aria-pressed={animated}
+            className="rounded bg-surface-container-high px-2 py-0.5 text-code-sm text-on-surface hover:text-primary"
+            title="Toggle animated flow arrows on the diagram (a traveling dot per edge)"
+          >
+            {animated ? "Flows: on" : "Flows: off"}
+          </button>
           <button
             disabled={!rendered || exporting}
             onClick={exportPng}

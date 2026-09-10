@@ -8,24 +8,67 @@ const DB_PATH = path.join(process.cwd(), "codelens.db");
 
 let db: Database.Database | null = null;
 
-export function getDb(): Database.Database {
-  if (db) return db;
-
+function connect(): Database.Database {
   if (TURSO_URL) {
     // libsql's bundled types lag its runtime: the constructor accepts
     // `authToken` for remote Turso connections (index.js reads opts.authToken),
     // but Database.Options was copied from better-sqlite3 and omits it.
-    db = new Database(TURSO_URL, {
+    return new Database(TURSO_URL, {
       authToken: process.env.TURSO_AUTH_TOKEN,
     } as Database.Options);
-  } else {
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
   }
-  db.pragma("foreign_keys = ON");
+  const local = new Database(DB_PATH);
+  local.pragma("journal_mode = WAL");
+  return local;
+}
 
+export function getDb(): Database.Database {
+  if (db) return db;
+  db = connect();
+  db.pragma("foreign_keys = ON");
   migrate(db);
   return db;
+}
+
+/**
+ * True when an error looks like a dead remote Turso stream — the Hrana
+ * protocol evicts idle connections server-side ("stream not found") and
+ * a long-lived server process keeps trying to use the corpse.
+ */
+function isStaleStreamError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /stream not found|Hrana|connection closed|disconnected/i.test(msg);
+}
+
+// Shared handle type so routes can type their withDb callbacks without
+// importing the libsql default export.
+export type DatabaseConnection = Database.Database;
+
+/**
+ * Like getDb(), but self-heals a stale remote connection: on the first
+ * stale-stream error the connection is torn down and re-established once,
+ * then the operation retried. Long-lived servers (next start / dev) sit
+ * idle between requests long enough for Turso to evict their streams.
+ *
+ * NOTE: withDb retries the WHOLE op — multi-statement ops must be
+ * idempotent (or transactional) so a retry can't double-apply partial
+ * writes.
+ */
+export function withDb<T>(op: (database: DatabaseConnection) => T): T {
+  try {
+    return op(getDb());
+  } catch (err) {
+    if (db && isStaleStreamError(err)) {
+      try {
+        db.close();
+      } catch {
+        // already dead — closing a corpse can throw too
+      }
+      db = null;
+      return op(getDb());
+    }
+    throw err;
+  }
 }
 
 // Schema v2 (multi-user): problems are owned by a GitHub-authenticated user.
@@ -49,7 +92,7 @@ export function migrate(db: Database.Database): void {
       name TEXT,
       email TEXT,
       avatar_url TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
     CREATE TABLE IF NOT EXISTS problems (
@@ -60,7 +103,7 @@ export function migrate(db: Database.Database): void {
       topic_tags TEXT NOT NULL DEFAULT '[]',
       difficulty TEXT CHECK(difficulty IN ('Easy','Medium','Hard')),
       source_code TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       UNIQUE(user_id, name)
     );
 
@@ -73,7 +116,7 @@ export function migrate(db: Database.Database): void {
       time_confidence TEXT,
       space_confidence TEXT,
       ir_json TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
     CREATE TABLE IF NOT EXISTS notes (
@@ -82,7 +125,7 @@ export function migrate(db: Database.Database): void {
       tag_type TEXT NOT NULL,
       text TEXT NOT NULL,
       line_number INTEGER,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
     CREATE TABLE IF NOT EXISTS card_states (
@@ -108,4 +151,23 @@ export function migrate(db: Database.Database): void {
   if (!noteColumns.some((c) => c.name === "answer")) {
     db.exec("ALTER TABLE notes ADD COLUMN answer TEXT");
   }
+ 
+  if (!noteColumns.some((c) => c.name === "source")) {
+    db.exec("ALTER TABLE notes ADD COLUMN source TEXT");
+  }
+  // card_states.lapse_count: how many times the card was graded "again" —
+  // cards at >= MISTAKE_THRESHOLD form the mistake journal.
+  const cardColumns = db.prepare("PRAGMA table_info(card_states)").all() as { name: string }[];
+  if (!cardColumns.some((c) => c.name === "lapse_count")) {
+    db.exec("ALTER TABLE card_states ADD COLUMN lapse_count INTEGER NOT NULL DEFAULT 0");
+  }
+ 
+  const problemColumns = db.prepare("PRAGMA table_info(problems)").all() as { name: string }[];
+  if (!problemColumns.some((c) => c.name === "share_slug")) {
+    db.exec("ALTER TABLE problems ADD COLUMN share_slug TEXT");
+  }
+  // Unconditional: if a previous migration created the column but died before
+  // the index, slug lookups would silently degrade to table scans and the
+  // UNIQUE protection would vanish.
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_problems_share_slug ON problems(share_slug) WHERE share_slug IS NOT NULL");
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { useCountUp } from "@/lib/useCountUp";
 import type { ProgressStats } from "@/lib/progress/stats";
 
 const DIFFICULTY_COLOR: Record<string, string> = {
@@ -19,6 +20,18 @@ function heatClass(count: number): string {
   if (count === 2) return "bg-primary/45";
   if (count <= 4) return "bg-primary/70";
   return "bg-primary";
+}
+
+// One animated stat card — the number counts up on load (reduced-motion users
+// see it jump straight to the value).
+function StatCard({ label, value }: { label: string; value: number }) {
+  const shown = useCountUp(value);
+  return (
+    <div className="panel flex flex-col gap-1 rounded-lg p-4">
+      <span className="label-caps">{label}</span>
+      <span className="text-3xl font-semibold text-text-high-contrast">{shown}</span>
+    </div>
+  );
 }
 
 export default function ProgressPage() {
@@ -104,18 +117,11 @@ export default function ProgressPage() {
 
         {/* Totals strip */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {[
-            { label: "Problems", value: stats.totals.problems },
-            { label: "Cards", value: stats.totals.cards },
-            { label: "Reviewed", value: stats.totals.reviewedCards },
-            { label: "Due today", value: stats.totals.dueToday },
-            { label: "Day streak", value: stats.totals.streak },
-          ].map((s) => (
-            <div key={s.label} className="panel flex flex-col gap-1 rounded-lg p-4">
-              <span className="label-caps">{s.label}</span>
-              <span className="text-3xl font-semibold text-text-high-contrast">{s.value}</span>
-            </div>
-          ))}
+          <StatCard label="Problems" value={stats.totals.problems} />
+          <StatCard label="Cards" value={stats.totals.cards} />
+          <StatCard label="Reviewed" value={stats.totals.reviewedCards} />
+          <StatCard label="Due today" value={stats.totals.dueToday} />
+          <StatCard label="Day streak" value={stats.totals.streak} />
         </section>
 
         {/* 30-day activity heatmap */}

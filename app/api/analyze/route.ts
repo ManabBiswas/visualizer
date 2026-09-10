@@ -6,7 +6,7 @@ import { analyzeComplexity } from "@/lib/complexity/analyze";
 import { analyzeBlockComplexity } from "@/lib/complexity/blocks";
 import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 import { generateCallGraph } from "@/lib/flowchart/callGraph";
-import { getDb } from "@/lib/db/init";
+import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { redactSecrets } from "@/lib/security/env";
 import { validateSource, validateProblemMeta } from "@/lib/security/validate";
@@ -121,64 +121,84 @@ export async function POST(req: NextRequest) {
       );
     }
     try {
-      const db = getDb();
-      // Upsert by problem name within this user's log: re-analyzing refreshes
-      // the row instead of duplicating it, and never touches other users' rows.
-      const existing = db
-        .prepare("SELECT id FROM problems WHERE name = ? AND user_id = ?")
-        .get(problem.name, userId) as { id: string } | undefined;
+      // withDb + one explicit transaction: the whole save (upsert problem,
+      // refresh analyses, sync parser-extracted notes) either fully applies
+      // or fully rolls back — a crash/stale-stream mid-sequence can no longer
+      // leave a problem with deleted analyses, and the retry is idempotent.
+      savedProblemId = withDb((db) => {
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          // Upsert by problem name within this user's log: re-analyzing
+          // refreshes the row instead of duplicating it, and never touches
+          // other users' rows.
+          const existing = db
+            .prepare("SELECT id FROM problems WHERE name = ? AND user_id = ?")
+            .get(problem.name, userId) as { id: string } | undefined;
 
-      if (existing) {
-        savedProblemId = existing.id;
-        db.prepare(
-          `UPDATE problems SET link = ?, topic_tags = ?, difficulty = ?, source_code = ?, created_at = datetime('now') WHERE id = ?`,
-        ).run(
-          problem.link,
-          JSON.stringify(problem.topicTags),
-          problem.difficulty,
-          sourceCheck.value,
-          savedProblemId,
-        );
-        db.prepare("DELETE FROM analyses WHERE problem_id = ?").run(savedProblemId);
-        db.prepare("DELETE FROM notes WHERE problem_id = ?").run(savedProblemId);
-      } else {
-        savedProblemId = randomUUID();
-        db.prepare(
-          `INSERT INTO problems (id, user_id, name, link, topic_tags, difficulty, source_code) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-          savedProblemId,
-          userId,
-          problem.name,
-          problem.link,
-          JSON.stringify(problem.topicTags),
-          problem.difficulty,
-          sourceCheck.value,
-        );
-      }
+          let problemId: string;
+          if (existing) {
+            problemId = existing.id;
+            db.prepare(
+              `UPDATE problems SET link = ?, topic_tags = ?, difficulty = ?, source_code = ?, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+            ).run(
+              problem.link,
+              JSON.stringify(problem.topicTags),
+              problem.difficulty,
+              sourceCheck.value,
+              problemId,
+            );
+            db.prepare("DELETE FROM analyses WHERE problem_id = ?").run(problemId);
+            // Preserve user-authored data: only parser-extracted notes are
+            // refreshed. User answers, AI-accepted cards and their SM-2
+            // review history survive a re-analyze.
+            db.prepare(
+              "DELETE FROM notes WHERE problem_id = ? AND source IS NULL",
+            ).run(problemId);
+          } else {
+            problemId = randomUUID();
+            db.prepare(
+              `INSERT INTO problems (id, user_id, name, link, topic_tags, difficulty, source_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+            ).run(
+              problemId,
+              userId,
+              problem.name,
+              problem.link,
+              JSON.stringify(problem.topicTags),
+              problem.difficulty,
+              sourceCheck.value,
+            );
+          }
 
-      const insertAnalysis = db.prepare(
-        `INSERT INTO analyses (id, problem_id, method_name, time_complexity, space_complexity, time_confidence, space_confidence, ir_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      );
-      for (const result of results) {
-        insertAnalysis.run(
-          randomUUID(),
-          savedProblemId,
-          result.method.name,
-          result.complexity.time.bigO,
-          result.complexity.space.bigO,
-          result.complexity.time.confidence,
-          result.complexity.space.confidence,
-          JSON.stringify(ir),
-        );
-      }
+          const insertAnalysis = db.prepare(
+            `INSERT INTO analyses (id, problem_id, method_name, time_complexity, space_complexity, time_confidence, space_confidence, ir_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          );
+          for (const result of results) {
+            insertAnalysis.run(
+              randomUUID(),
+              problemId,
+              result.method.name,
+              result.complexity.time.bigO,
+              result.complexity.space.bigO,
+              result.complexity.time.confidence,
+              result.complexity.space.confidence,
+              JSON.stringify(ir),
+            );
+          }
 
-      const insertNote = db.prepare(
-        `INSERT INTO notes (id, problem_id, tag_type, text, line_number) VALUES (?, ?, ?, ?, ?)`,
-      );
-      for (const tag of tags) {
-        insertNote.run(randomUUID(), savedProblemId, tag.tag, tag.text, tag.line);
-      }
+          const insertNote = db.prepare(
+            `INSERT INTO notes (id, problem_id, tag_type, text, line_number) VALUES (?, ?, ?, ?, ?)`,
+          );
+          for (const tag of tags) {
+            insertNote.run(randomUUID(), problemId, tag.tag, tag.text, tag.line);
+          }
+          db.exec("COMMIT");
+          return problemId;
+        } catch (err) {
+          db.exec("ROLLBACK");
+          throw err;
+        }
+      });
     } catch (err) {
       // On a read-only filesystem (e.g. Vercel, until the Postgres swap in
       // DEPLOYMENT.md is done) this write will fail. The flowchart/complexity/

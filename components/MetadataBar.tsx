@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TOPICS } from "@/lib/topics";
+import { toast } from "@/components/Toast";
 
 export type ProblemMeta = {
   name: string;
@@ -31,11 +32,14 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
       if (res.ok && data.found && data.meta) {
         onChange({ ...meta, ...data.meta });
         setImportState("idle");
+        toast.success(`Imported: ${data.meta.name}`);
       } else {
         setImportState("fail");
+        toast.error(data.error ?? "Couldn't fetch that LeetCode problem — enter details manually.");
       }
     } catch {
       setImportState("fail");
+      toast.error("Couldn't fetch that LeetCode problem — enter details manually.");
     }
   }
 
@@ -96,11 +100,7 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
             >
               {importState === "loading" ? "Importing…" : "Import"}
             </button>
-            {importState === "fail" && (
-              <span className="text-body-sm text-text-muted">
-                Couldn&apos;t fetch that problem — fill the fields below manually.
-              </span>
-            )}
+            {/* Failures are reported via toast — no duplicate inline hint. */}
           </form>
 
           <label className="flex flex-col gap-1">
