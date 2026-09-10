@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db/init";
+import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { isValidId } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
@@ -126,22 +126,29 @@ export async function POST(req: NextRequest) {
 
   // Owner-scoped load of the problem + its latest analysis batch (the IR
   // rides inside analyses.ir_json; a foreign problem is indistinguishable
-  // from a missing one).
+  // from a missing one). withDb heals a stale Turso stream + retries once.
   let problem: { name: string; difficulty: string | null; topic_tags: string; source_code: string };
   let analyses: Array<{ method_name: string | null; time_complexity: string | null; space_complexity: string | null; ir_json: string | null }>;
   try {
-    const db = getDb();
-    problem = db
-      .prepare("SELECT name, difficulty, topic_tags, source_code FROM problems WHERE id = ? AND user_id = ?")
-      .get(problemId, userId) as typeof problem;
-    if (!problem) {
+    const loaded = withDb((db) => {
+      const p = db
+        .prepare("SELECT name, difficulty, topic_tags, source_code FROM problems WHERE id = ? AND user_id = ?")
+        .get(problemId, userId) as typeof problem | undefined;
+      if (!p) return null;
+      // Only the newest analysis batch carries the IR the prompt needs;
+      // older rows are dead weight (each duplicates the full ProgramIR).
+      const rows = db
+        .prepare(
+          "SELECT method_name, time_complexity, space_complexity, ir_json FROM analyses WHERE problem_id = ? ORDER BY created_at DESC LIMIT 20",
+        )
+        .all(problemId) as typeof analyses;
+      return { p, rows };
+    });
+    if (!loaded) {
       return NextResponse.json({ error: "Problem not found." }, { status: 404 });
     }
-    analyses = db
-      .prepare(
-        "SELECT method_name, time_complexity, space_complexity, ir_json FROM analyses WHERE problem_id = ? ORDER BY created_at DESC",
-      )
-      .all(problemId) as typeof analyses;
+    problem = loaded.p;
+    analyses = loaded.rows;
   } catch (err) {
     return NextResponse.json({ error: redactSecrets((err as Error).message) }, { status: 503 });
   }

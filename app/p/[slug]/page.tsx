@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getDb } from "@/lib/db/init";
+import { withDb } from "@/lib/db/init";
 import { isValidShareSlug } from "@/lib/share/slug";
 import { SharedProblemView, type MethodSummary, type SharedProblem } from "./view";
 
@@ -20,13 +20,17 @@ async function loadShared(slug: string): Promise<SharedProblem | null> {
       }
     | undefined;
   try {
-    const db = getDb();
-    row = db
-      .prepare(
-        `SELECT name, link, difficulty, topic_tags, source_code, created_at
-         FROM problems WHERE share_slug = ?`
-      )
-      .get(slug) as typeof row;
+    // withDb: a stale Turso stream would otherwise make every public share
+    // link 404 until an unrelated authed request healed the connection — the
+    // public path has no other chance to self-heal.
+    row = withDb((db) =>
+      db
+        .prepare(
+          `SELECT name, link, difficulty, topic_tags, source_code, created_at
+           FROM problems WHERE share_slug = ?`
+        )
+        .get(slug),
+    ) as typeof row;
   } catch {
     return null;
   }
@@ -52,22 +56,23 @@ async function loadMethods(slug: string): Promise<MethodSummary[]> {
   // stores the full ProgramIR per analysis row; the summary columns are the
   // stable contract we can rely on across schema tweaks.
   try {
-    const db = getDb();
-    const rows = db
-      .prepare(
-        `SELECT a.method_name, a.time_complexity, a.space_complexity, a.time_confidence, a.space_confidence
-         FROM analyses a
-         JOIN problems p ON p.id = a.problem_id
-         WHERE p.share_slug = ?
-         ORDER BY a.created_at DESC`
-      )
-      .all(slug) as Array<{
-        method_name: string | null;
-        time_complexity: string | null;
-        space_complexity: string | null;
-        time_confidence: string | null;
-        space_confidence: string | null;
-      }>;
+    const rows = withDb((db) =>
+      db
+        .prepare(
+          `SELECT a.method_name, a.time_complexity, a.space_complexity, a.time_confidence, a.space_confidence
+           FROM analyses a
+           JOIN problems p ON p.id = a.problem_id
+           WHERE p.share_slug = ?
+           ORDER BY a.created_at DESC`
+        )
+        .all(slug),
+    ) as Array<{
+      method_name: string | null;
+      time_complexity: string | null;
+      space_complexity: string | null;
+      time_confidence: string | null;
+      space_confidence: string | null;
+    }>;
     // Dedupe method names keeping the newest (first) row per method.
     const seen = new Set<string>();
     const methods: MethodSummary[] = [];
@@ -113,15 +118,16 @@ export default async function SharedProblemPage({ params }: Props) {
   const methods = await loadMethods(slug);
   const notes = await (async () => {
     try {
-      const db = getDb();
-      const rows = db
-        .prepare(
-          `SELECT n.tag_type, n.text, n.line_number
-           FROM notes n JOIN problems p ON p.id = n.problem_id
-           WHERE p.share_slug = ?
-           ORDER BY n.line_number`
-        )
-        .all(slug) as Array<{ tag_type: string; text: string; line_number: number | null }>;
+      const rows = withDb((db) =>
+        db
+          .prepare(
+            `SELECT n.tag_type, n.text, n.line_number
+             FROM notes n JOIN problems p ON p.id = n.problem_id
+             WHERE p.share_slug = ?
+             ORDER BY n.line_number`
+          )
+          .all(slug),
+      ) as Array<{ tag_type: string; text: string; line_number: number | null }>;
       return rows;
     } catch {
       return [];

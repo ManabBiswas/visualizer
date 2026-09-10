@@ -100,11 +100,7 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
             >
               {importState === "loading" ? "Importing…" : "Import"}
             </button>
-            {importState === "fail" && (
-              <span className="text-body-sm text-text-muted">
-                Couldn&apos;t fetch that problem — fill the fields below manually.
-              </span>
-            )}
+            {/* Failures are reported via toast — no duplicate inline hint. */}
           </form>
 
           <label className="flex flex-col gap-1">

@@ -75,7 +75,7 @@ export function RunConsole({ code }: { code: string }) {
             value={stdin}
             onChange={(e) => setStdin(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !running) {
                 e.preventDefault();
                 void run();
               }

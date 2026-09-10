@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateCallGraph, generateCallGraphDiagram } from "./callGraph";
+import { generateCallGraph } from "./callGraph";
 import { ProgramIR, MethodIR } from "@/lib/ir";
 
 function method(name: string, calls: string[], body: MethodIR["body"] = []): MethodIR {
@@ -131,6 +131,6 @@ describe("generateCallGraph", () => {
 
   it("keeps stable node ids across consecutive calls (same source = same graph)", () => {
     const ir = program([method("solve", ["dfs"]), method("dfs", [])]);
-    expect(generateCallGraphDiagram(ir)).toBe(generateCallGraphDiagram(ir));
+    expect(generateCallGraph(ir)?.diagram).toBe(generateCallGraph(ir)?.diagram);
   });
 });

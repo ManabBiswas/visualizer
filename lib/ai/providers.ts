@@ -125,7 +125,14 @@ export function validateCustomBaseUrl(raw: unknown): string | null {
   const host = url.hostname.toLowerCase();
   const isLocal = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
   if (isLocal) {
+    // Local endpoints are a dev convenience (running your own LLM server) —
+    // but on a hosted deployment they'd give every authenticated user a
+    // server-side loopback port-scan oracle. Opt-in via env flag only.
+    if (process.env.ALLOW_LOCAL_AI_BASE_URL !== "1") return null;
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    // Localhost only — no other private/loopback hosts, and default ports
+    // only (a custom port would extend the scan surface).
+    if (url.port !== "" && url.port !== "80" && url.port !== "443" && url.port !== "8080") return null;
   } else {
     if (url.protocol !== "https:") return null;
     // DNS-safe hostname only: letters, digits, dots, hyphens, IPv6 brackets.
@@ -134,6 +141,8 @@ export function validateCustomBaseUrl(raw: unknown): string | null {
       (h) => host === h || host.endsWith(`.${h}`),
     );
     if (!allowed) return null;
+    // Allowlisted hosts on default ports only — no port scanning via https.
+    if (url.port !== "" && url.port !== "443") return null;
   }
 
   // No credentials embedded, no fragments, no query — we own the path.

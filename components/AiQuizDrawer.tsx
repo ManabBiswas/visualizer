@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PROVIDERS, PROVIDER_IDS, type ProviderId } from "@/lib/ai/providers";
 import { MIN_DRAFT_COUNT, MAX_DRAFT_COUNT } from "@/lib/ai/prompt";
 
@@ -114,6 +114,18 @@ export function AiQuizDrawer({
 
   const hasDrafts = drafts !== null && drafts.length > 0;
 
+  // Escape closes the drawer; focus returns to the close button so keyboard
+  // users aren't stranded below the panel they just dismissed.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-surface-container-lowest p-4">
       <div className="flex items-start justify-between gap-3">
@@ -124,7 +136,7 @@ export function AiQuizDrawer({
             provider you choose, using your own API key. CodeLens stores nothing.
           </span>
         </div>
-        <button onClick={onClose} className="text-body-sm text-text-muted hover:text-on-surface" aria-label="Close AI drafting">
+        <button ref={closeRef} onClick={onClose} className="text-body-sm text-text-muted hover:text-on-surface" aria-label="Close AI drafting">
           ✕
         </button>
       </div>

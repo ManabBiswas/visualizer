@@ -124,15 +124,3 @@ export function generateCallGraph(
 
   return { diagram: lines.join("\n"), tooltips };
 }
-
-/**
- * Back-compat: callers that only need the diagram text (e.g. tests) get
- * the same string the old function returned.
- */
-export function generateCallGraphDiagram(
-  ir: ProgramIR,
-  handlerName = "onCallGraphNodeClick",
-  theme: Theme = "dark",
-): string | null {
-  return generateCallGraph(ir, handlerName, theme)?.diagram ?? null;
-}

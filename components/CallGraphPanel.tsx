@@ -54,15 +54,26 @@ export function CallGraphPanel({
     };
   }, [handlerName, onMethodClick]);
 
+  // Mermaid render only on diagram/theme change; the arrow-anim toggle is
+  // applied by the cheap DOM-pass effect below (no re-render needed), so
+  // `animated` is read through a ref instead of a dependency.
+  const renderSeq = useRef(0);
+  const animatedRef = useRef(animated);
+  useEffect(() => {
+    animatedRef.current = animated;
+  }, [animated]);
   useEffect(() => {
     if (!scopedDiagram || !containerRef.current) return;
     setError(null);
     setRendered(false);
     ensureMermaid(theme);
     const id = `callgraph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const seq = ++renderSeq.current;
     mermaid
       .render(id, scopedDiagram)
       .then(({ svg }) => {
+        // Staleness guard: a newer render superseded this one.
+        if (seq !== renderSeq.current) return;
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
           // Signature + time/space tooltips on hover.
@@ -71,12 +82,15 @@ export function CallGraphPanel({
             const map: TooltipMap = new Map(Object.entries(tooltips));
             attachSvgTooltips(svgEl as SVGSVGElement, map);
           }
-          if (svgEl && animated) attachEdgeDots(svgEl as SVGSVGElement);
+          if (svgEl && animatedRef.current) attachEdgeDots(svgEl as SVGSVGElement);
           setRendered(true);
         }
       })
-      .catch((e) => setError(String(e)));
-  }, [scopedDiagram, theme, tooltips, animated]);
+      .catch((e) => {
+        if (seq !== renderSeq.current) return; // stale error — ignore
+        setError(String(e));
+      });
+  }, [scopedDiagram, theme, tooltips]);
 
   // Toggle dots on/off without re-rendering mermaid.
   useEffect(() => {

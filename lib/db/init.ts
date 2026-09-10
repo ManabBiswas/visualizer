@@ -40,13 +40,21 @@ function isStaleStreamError(err: unknown): boolean {
   return /stream not found|Hrana|connection closed|disconnected/i.test(msg);
 }
 
+// Shared handle type so routes can type their withDb callbacks without
+// importing the libsql default export.
+export type DatabaseConnection = Database.Database;
+
 /**
  * Like getDb(), but self-heals a stale remote connection: on the first
  * stale-stream error the connection is torn down and re-established once,
  * then the operation retried. Long-lived servers (next start / dev) sit
  * idle between requests long enough for Turso to evict their streams.
+ *
+ * NOTE: withDb retries the WHOLE op — multi-statement ops must be
+ * idempotent (or transactional) so a retry can't double-apply partial
+ * writes.
  */
-export function withDb<T>(op: (database: Database.Database) => T): T {
+export function withDb<T>(op: (database: DatabaseConnection) => T): T {
   try {
     return op(getDb());
   } catch (err) {
@@ -84,7 +92,7 @@ export function migrate(db: Database.Database): void {
       name TEXT,
       email TEXT,
       avatar_url TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
     CREATE TABLE IF NOT EXISTS problems (
@@ -95,7 +103,7 @@ export function migrate(db: Database.Database): void {
       topic_tags TEXT NOT NULL DEFAULT '[]',
       difficulty TEXT CHECK(difficulty IN ('Easy','Medium','Hard')),
       source_code TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       UNIQUE(user_id, name)
     );
 
@@ -108,7 +116,7 @@ export function migrate(db: Database.Database): void {
       time_confidence TEXT,
       space_confidence TEXT,
       ir_json TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
     CREATE TABLE IF NOT EXISTS notes (
@@ -117,7 +125,7 @@ export function migrate(db: Database.Database): void {
       tag_type TEXT NOT NULL,
       text TEXT NOT NULL,
       line_number INTEGER,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
     CREATE TABLE IF NOT EXISTS card_states (
@@ -157,6 +165,9 @@ export function migrate(db: Database.Database): void {
   const problemColumns = db.prepare("PRAGMA table_info(problems)").all() as { name: string }[];
   if (!problemColumns.some((c) => c.name === "share_slug")) {
     db.exec("ALTER TABLE problems ADD COLUMN share_slug TEXT");
-    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_problems_share_slug ON problems(share_slug) WHERE share_slug IS NOT NULL");
   }
+  // Unconditional: if a previous migration created the column but died before
+  // the index, slug lookups would silently degrade to table scans and the
+  // UNIQUE protection would vanish.
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_problems_share_slug ON problems(share_slug) WHERE share_slug IS NOT NULL");
 }

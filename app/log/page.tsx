@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
 import { logToMarkdown, logToCsv, LogExportRow } from "@/lib/export/log";
@@ -37,6 +38,15 @@ function parseTopics(raw: string | null): string[] {
   }
 }
 
+// created_at rows may be legacy "YYYY-MM-DD HH:MM:SS" (UTC, space separator)
+// or ISO "YYYY-MM-DDTHH:MM:SS.sssZ" from the unified format. Parse both as
+// UTC so dates never shift by the viewer's timezone near midnight.
+function formatDate(raw: string): string {
+  const iso = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString();
+}
+
 export default function LogPage() {
   const router = useRouter();
   const { status } = useSession();
@@ -44,6 +54,7 @@ export default function LogPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     // The log is per-account; don't fire a doomed 401 request for
@@ -53,16 +64,31 @@ export default function LogPage() {
     const params = new URLSearchParams();
     if (topicFilter) params.set("topic", topicFilter);
     if (difficultyFilter) params.set("difficulty", difficultyFilter);
-    fetch(`/api/problems?${params}`)
-      .then((r) => r.json())
+    Promise.resolve()
+      .then(() => {
+        // Flip the loading flag in a callback (not synchronously in the
+        // effect body) to avoid cascading renders flagged by the compiler lint.
+        if (!cancelled) setLoading(true);
+        return fetch(`/api/problems?${params}`);
+      })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error ?? "Could not load your problem log.");
+        return d as { problems?: ProblemRow[] };
+      })
       .then((d) => {
         if (!cancelled) {
-          setProblems(d.problems);
+          setProblems(d.problems ?? []);
+          setLoadError(null);
           setLoading(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
+      .catch((e) => {
+        if (!cancelled) {
+          setProblems([]);
+          setLoadError((e as Error).message);
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -172,6 +198,12 @@ export default function LogPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="mb-3 rounded border border-error/40 bg-error-container/20 px-3 py-2 text-body-sm text-error">
+          {loadError}
+        </div>
+      )}
+
       {status === "unauthenticated" ? (
         <SignInPrompt
           title="Sign in to see your problem log"
@@ -218,7 +250,15 @@ export default function LogPage() {
                       {p.name}
                     </a>
                   ) : (
-                    p.name
+                    // Keyboard-reachable link to open the problem (the row
+                    // click is a mouse-only convenience, this is the a11y path).
+                    <Link
+                      href={`/analyze?problem=${p.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-primary hover:underline"
+                    >
+                      {p.name}
+                    </Link>
                   )}
                 </td>
                 <td className="py-2 text-on-surface-variant">{parseTopics(p.topic_tags).join(", ")}</td>
@@ -226,7 +266,7 @@ export default function LogPage() {
                 <td className="py-2 font-mono text-code-sm text-on-surface">{p.time_complexity}</td>
                 <td className="py-2 font-mono text-code-sm text-on-surface">{p.space_complexity}</td>
                 <td className="py-2 text-on-surface-variant">{p.note_count}</td>
-                <td className="py-2 text-text-muted">{new Date(p.created_at).toLocaleDateString()}</td>
+                <td className="py-2 text-text-muted">{formatDate(p.created_at)}</td>
                 <td className="py-2">
                   {p.share_slug ? (
                     <span className="flex items-center gap-1">

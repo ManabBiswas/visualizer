@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getDb } from "@/lib/db/init";
+import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { isValidId, stripControlChars } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
+import { isRateLimited } from "@/lib/security/rateLimit";
 
 // Accepts reviewed AI-drafted quiz cards into the deck. This is the
 // human-approval gate of the BYO-key drafting flow: the client shows drafts
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to add quiz cards." }, { status: 401 });
   }
+  if (isRateLimited(`quizcards:${userId}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
+  }
 
   let body: unknown;
   try {
@@ -59,42 +63,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No usable cards in the request." }, { status: 400 });
   }
 
-  let db;
   try {
-    db = getDb();
+    // withDb + one explicit transaction: the dedupe-then-insert batch is
+    // atomic, so concurrent accepts can't double-insert, and a stale Turso
+    // stream heals + retries the whole block (the transaction makes it
+    // idempotent).
+    const result = withDb((db): string[] | null => {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        // Ownership via the problem row; a foreign problem is indistinguishable
+        // from a missing one.
+        const problem = db
+          .prepare("SELECT id FROM problems WHERE id = ? AND user_id = ?")
+          .get(problemId, userId) as { id: string } | undefined;
+        if (!problem) {
+          db.exec("ROLLBACK");
+          return null;
+        }
+
+        // Skip exact-duplicate questions already in this problem's deck —
+        // re-accepting the same draft shouldn't double the card.
+        const existing = new Set(
+          (
+            db
+              .prepare("SELECT text FROM notes WHERE problem_id = ? AND tag_type = 'q'")
+              .all(problemId) as Array<{ text: string }>
+          ).map((r) => r.text),
+        );
+
+        const insert = db.prepare(
+          "INSERT INTO notes (id, problem_id, tag_type, text, answer, line_number, source) VALUES (?, ?, 'q', ?, ?, ?, 'ai')",
+        );
+        const acceptedIds: string[] = [];
+        for (const card of clean) {
+          if (existing.has(card.question)) continue;
+          const id = randomUUID();
+          insert.run(id, problemId, card.question, card.answer, card.line);
+          acceptedIds.push(id);
+        }
+        db.exec("COMMIT");
+        return acceptedIds;
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
+    });
+
+    if (result === null) {
+      return NextResponse.json({ error: "Problem not found." }, { status: 404 });
+    }
+    return NextResponse.json({ accepted: result.length, ids: result });
   } catch (err) {
     return NextResponse.json({ error: redactSecrets((err as Error).message) }, { status: 503 });
   }
-
-  // Ownership via the problem row; a foreign problem is indistinguishable
-  // from a missing one.
-  const problem = db
-    .prepare("SELECT id FROM problems WHERE id = ? AND user_id = ?")
-    .get(problemId, userId) as { id: string } | undefined;
-  if (!problem) {
-    return NextResponse.json({ error: "Problem not found." }, { status: 404 });
-  }
-
-  // Skip exact-duplicate questions already in this problem's deck —
-  // re-accepting the same draft shouldn't double the card.
-  const existing = new Set(
-    (
-      db
-        .prepare("SELECT text FROM notes WHERE problem_id = ? AND tag_type = 'q'")
-        .all(problemId) as Array<{ text: string }>
-    ).map((r) => r.text),
-  );
-
-  const insert = db.prepare(
-    "INSERT INTO notes (id, problem_id, tag_type, text, answer, line_number, source) VALUES (?, ?, 'q', ?, ?, ?, 'ai')",
-  );
-  const acceptedIds: string[] = [];
-  for (const card of clean) {
-    if (existing.has(card.question)) continue;
-    const id = randomUUID();
-    insert.run(id, problemId, card.question, card.answer, card.line);
-    acceptedIds.push(id);
-  }
-
-  return NextResponse.json({ accepted: acceptedIds.length, ids: acceptedIds });
 }

@@ -36,10 +36,6 @@ export function subscribeTheme(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-export function getTheme(): Theme {
-  return getSnapshot();
-}
-
 export function setTheme(theme: Theme): void {
   cached = theme;
   if (typeof document !== "undefined") {

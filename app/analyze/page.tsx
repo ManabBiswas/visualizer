@@ -144,7 +144,12 @@ function EditorPage() {
     setActiveLine(line);
   }
 
-  async function analyze(source: string = code) {
+  // Takes meta explicitly: loadSample() calls this in the same tick as
+  // setMeta(), so reading the `meta` state here would see the PREVIOUS
+  // problem's meta and upsert the sample under the old name — destroying the
+  // old problem's analyses/notes (the server upserts by name).
+  async function analyze(source: string = code, metaOverride?: ProblemMeta) {
+    const effectiveMeta = metaOverride ?? meta;
     setLoading(true);
     setError(null);
     try {
@@ -153,7 +158,7 @@ function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           source,
-          problem: meta.name ? meta : undefined,
+          problem: effectiveMeta.name ? effectiveMeta : undefined,
         }),
       });
       const data = await res.json();
@@ -165,7 +170,7 @@ function EditorPage() {
       setActiveMethod(0);
       setSavedProblemId(data.savedProblemId ?? null);
       setSaveWarning(data.saveWarning ?? null);
-      if (data.savedProblemId) toast.success(`Saved to log: ${meta.name}`);
+      if (data.savedProblemId) toast.success(`Saved to log: ${effectiveMeta.name}`);
     } catch (e) {
       setError((e as Error).message);
       toast.error((e as Error).message);
@@ -176,13 +181,14 @@ function EditorPage() {
 
   /** Load one of the curated samples: fill editor + meta, then analyze it. */
   function loadSample(sample: Sample) {
-    setCode(sample.source);
-    setMeta({
+    const sampleMeta: ProblemMeta = {
       name: sample.name,
       link: sample.link,
       topicTags: [...sample.topicTags],
       difficulty: sample.difficulty,
-    });
+    };
+    setCode(sample.source);
+    setMeta(sampleMeta);
     setResults([]);
     setCallGraph(null);
     setCallGraphLight(null);
@@ -191,7 +197,7 @@ function EditorPage() {
     setSaveWarning(null);
     setError(null);
     setSampleOpen(false);
-    void analyze(sample.source);
+    void analyze(sample.source, sampleMeta);
   }
 
   const current = results[activeMethod];

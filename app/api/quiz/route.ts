@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db/init";
+import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { cleanQueryParam, isValidId } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
+import { isRateLimited } from "@/lib/security/rateLimit";
 import { pickFocusSession } from "@/lib/spaced/focus";
 
 type QuizRow = {
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to view your quiz cards." }, { status: 401 });
   }
+  if (isRateLimited(`quiz:${userId}`, 60, 60_000)) {
+    return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
+  }
 
   const topic = cleanQueryParam(req.nextUrl.searchParams.get("topic"));
   const problemId = cleanQueryParam(req.nextUrl.searchParams.get("problem"));
@@ -42,20 +46,23 @@ export async function GET(req: NextRequest) {
 
   let rows: QuizRow[];
   try {
-    const db = getDb();
-    rows = db
-      .prepare(
-        `SELECT n.id, n.problem_id, n.text AS question, n.answer, n.line_number,
-                p.name AS problem_name, p.topic_tags,
-                cs.repetitions, cs.ease_factor, cs.interval_days, cs.due_date, cs.last_reviewed,
-                cs.lapse_count, n.source
-         FROM notes n
-         JOIN problems p ON p.id = n.problem_id
-         LEFT JOIN card_states cs ON cs.note_id = n.id
-         WHERE n.tag_type = 'q' AND p.user_id = ?
-         ORDER BY CASE WHEN cs.due_date IS NULL THEN 0 ELSE 1 END, cs.due_date ASC, n.created_at ASC`,
-      )
-      .all(userId) as QuizRow[];
+    // withDb: heal a stale Turso stream and retry the deck read once.
+    rows = withDb((db) =>
+      db
+        .prepare(
+          `SELECT n.id, n.problem_id, n.text AS question, n.answer, n.line_number,
+                  p.name AS problem_name, p.topic_tags,
+                  cs.repetitions, cs.ease_factor, cs.interval_days, cs.due_date, cs.last_reviewed,
+                  cs.lapse_count, n.source
+           FROM notes n
+           JOIN problems p ON p.id = n.problem_id
+           LEFT JOIN card_states cs ON cs.note_id = n.id
+           WHERE n.tag_type = 'q' AND p.user_id = ?
+           ORDER BY CASE WHEN cs.due_date IS NULL THEN 0 ELSE 1 END, cs.due_date ASC, n.created_at ASC
+           LIMIT 2000`,
+        )
+        .all(userId),
+    ) as QuizRow[];
   } catch (err) {
     return NextResponse.json(
       { cards: [], warning: `Could not read quiz cards: ${redactSecrets((err as Error).message)}` },

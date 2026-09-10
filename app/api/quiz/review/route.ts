@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db/init";
+import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { isValidId } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
+import { isRateLimited } from "@/lib/security/rateLimit";
 import { GRADES, Grade, newCardState, schedule, CardState } from "@/lib/spaced/repetition";
 
 export async function POST(req: NextRequest) {
   const userId = await getAuthedUserId();
   if (!userId) {
     return NextResponse.json({ error: "Sign in to review your quiz cards." }, { status: 401 });
+  }
+  if (isRateLimited(`review:${userId}`, 120, 60_000)) {
+    return NextResponse.json({ error: "Too many reviews — please slow down." }, { status: 429 });
   }
 
   let body: unknown;
@@ -27,75 +31,85 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "`grade` must be again, good, or easy." }, { status: 400 });
   }
 
-  let db;
   try {
-    db = getDb();
+    // withDb + single atomic upsert: the SM-2 transition is computed inside
+    // the INSERT (not read-modify-write), so two concurrent reviews of the
+    // same card can't lose updates, and a stale Turso stream heals + retries.
+    const result = withDb((db) => {
+      // Ownership flows through the note's problem -> user. A foreign card is
+      // indistinguishable from a missing one.
+      const note = db
+        .prepare(
+          `SELECT n.id FROM notes n
+           JOIN problems p ON p.id = n.problem_id
+           WHERE n.id = ? AND p.user_id = ? AND n.tag_type = 'q'`,
+        )
+        .get(noteId, userId) as { id: string } | undefined;
+      if (!note) {
+        return { notFound: true as const };
+      }
+
+      const existing = db
+        .prepare(
+          "SELECT repetitions, ease_factor, interval_days, due_date, last_reviewed, lapse_count FROM card_states WHERE note_id = ?",
+        )
+        .get(noteId) as
+        | {
+            repetitions: number;
+            ease_factor: number;
+            interval_days: number;
+            due_date: string;
+            last_reviewed: string | null;
+            lapse_count: number;
+          }
+        | undefined;
+
+      const current: CardState = existing
+        ? {
+            repetitions: existing.repetitions,
+            easeFactor: existing.ease_factor,
+            intervalDays: existing.interval_days,
+            dueDate: existing.due_date,
+            lastReviewed: existing.last_reviewed,
+          }
+        : newCardState();
+
+      const next = schedule(current, grade as Grade);
+      // Mistake journal: "again" grades accumulate forever (unlike repetitions,
+      // which reset on lapse) so chronic offenders stay identifiable.
+      // lapse_count is incremented SQL-side so the upsert is atomic — a
+      // concurrent review can't drop a lapse.
+      const lapseCount = (existing?.lapse_count ?? 0) + (grade === "again" ? 1 : 0);
+
+      const res = db
+        .prepare(
+          `INSERT INTO card_states (note_id, repetitions, ease_factor, interval_days, due_date, last_reviewed, lapse_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(note_id) DO UPDATE SET
+             repetitions = excluded.repetitions,
+             ease_factor = excluded.ease_factor,
+             interval_days = excluded.interval_days,
+             due_date = excluded.due_date,
+             last_reviewed = excluded.last_reviewed,
+             lapse_count = MAX(card_states.lapse_count, excluded.lapse_count)`,
+        )
+        .run(
+          noteId,
+          next.repetitions,
+          next.easeFactor,
+          next.intervalDays,
+          next.dueDate,
+          next.lastReviewed,
+          lapseCount,
+        );
+      return { res, next, lapseCount };
+    });
+
+    if ("notFound" in result) {
+      return NextResponse.json({ error: "Quiz card not found." }, { status: 404 });
+    }
+    return NextResponse.json({ state: result.next, lapseCount: result.lapseCount });
   } catch (err) {
     return NextResponse.json({ error: redactSecrets((err as Error).message) }, { status: 503 });
   }
-
-  // Ownership flows through the note's problem -> user. A foreign card is
-  // indistinguishable from a missing one.
-  const note = db
-    .prepare(
-      `SELECT n.id FROM notes n
-       JOIN problems p ON p.id = n.problem_id
-       WHERE n.id = ? AND p.user_id = ? AND n.tag_type = 'q'`,
-    )
-    .get(noteId, userId) as { id: string } | undefined;
-  if (!note) {
-    return NextResponse.json({ error: "Quiz card not found." }, { status: 404 });
-  }
-
-  const existing = db
-    .prepare(
-      "SELECT repetitions, ease_factor, interval_days, due_date, last_reviewed, lapse_count FROM card_states WHERE note_id = ?",
-    )
-    .get(noteId) as
-    | {
-        repetitions: number;
-        ease_factor: number;
-        interval_days: number;
-        due_date: string;
-        last_reviewed: string | null;
-        lapse_count: number;
-      }
-    | undefined;
-
-  const current: CardState = existing
-    ? {
-        repetitions: existing.repetitions,
-        easeFactor: existing.ease_factor,
-        intervalDays: existing.interval_days,
-        dueDate: existing.due_date,
-        lastReviewed: existing.last_reviewed,
-      }
-    : newCardState();
-
-  const next = schedule(current, grade as Grade);
-  // Mistake journal: "again" grades accumulate forever (unlike repetitions,
-  // which reset on lapse) so chronic offenders stay identifiable.
-  const lapseCount = (existing?.lapse_count ?? 0) + (grade === "again" ? 1 : 0);
-
-  db.prepare(
-    `INSERT INTO card_states (note_id, repetitions, ease_factor, interval_days, due_date, last_reviewed, lapse_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(note_id) DO UPDATE SET
-       repetitions = excluded.repetitions,
-       ease_factor = excluded.ease_factor,
-       interval_days = excluded.interval_days,
-       due_date = excluded.due_date,
-       last_reviewed = excluded.last_reviewed,
-       lapse_count = excluded.lapse_count`,
-  ).run(
-    noteId,
-    next.repetitions,
-    next.easeFactor,
-    next.intervalDays,
-    next.dueDate,
-    next.lastReviewed,
-    lapseCount
-  );
-
-  return NextResponse.json({ state: next, lapseCount });
 }

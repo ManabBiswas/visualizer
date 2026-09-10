@@ -57,6 +57,9 @@ Copy `.env.example` to `.env.local` (dev) or set them in your host's dashboard (
 | `AUTH_SECRET` | yes | Session-signing key. Generate with `openssl rand -base64 32` |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | yes | GitHub OAuth app credentials (see below) |
 | `NEXT_PUBLIC_ENABLE_RUN` | no | Set to `1` to enable the run console. Requires a local JDK; leave unset on serverless |
+| `CODELENS_PARSER` | no | `java` to use the JVM parser CLI as a cross-check (default: in-process TS parser) |
+| `JAVAPARSER_JAR` | no | Path to the JavaParser jar if not in the default `~/.m2` location |
+| `ALLOW_LOCAL_AI_BASE_URL` | no | Set to `1` to allow `http://localhost` custom AI provider endpoints — dev machines only |
 
 **GitHub OAuth app**: create one at <https://github.com/settings/developers> (or a GitHub App) with callback URL `https://YOUR_DOMAIN/api/auth/callback/github` (plus `http://localhost:3000/api/auth/callback/github` for dev). The app must request **read-only** access to public data — CodeLens only needs the user's id, login, name, and avatar.
 
@@ -127,7 +130,7 @@ proxy.ts              CSP + security headers (Next.js 16 proxy convention, ex-mi
 ## How analysis works
 
 1. User pastes Java code into the editor.
-2. `POST /api/analyze` sends the source to the Java parser CLI.
+2. `POST /api/analyze` parses it with the in-process TypeScript parser (java-parser).
 3. The parser walks the AST and emits IR JSON (loops with conditions and bound classification, calls with receiver-qualified targets and args, returns with values).
 4. TypeScript modules transform the IR into:
    - time/space complexity estimates with reasoning
@@ -170,7 +173,7 @@ The parser is heuristic-driven but covers common DSA patterns well: nested loops
 
 ## Status
 
-Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parser, no JVM required), multi-color flowcharts with embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized), five curated samples with deep links, LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal, Anki export and opt-in BYO-key AI quiz drafting, progress dashboard (heatmap, streak, topic mastery), public share links, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, input-validation + secret-redaction security layer, and a full test suite (225 tests incl. TS/JVM parser parity).
+Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parser, no JVM required), multi-color flowcharts with animated control-flow arrows, embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized), five curated samples with deep links, LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal, Anki export and opt-in BYO-key AI quiz drafting, progress dashboard (heatmap, streak, topic mastery), public share links with OG images, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, self-healing DB connections (stale-stream retry), input-validation + secret-redaction security layer, and a full test suite (280 tests incl. TS/JVM parser parity).
 
 v0.3 and v0.4 are shipped (share links, weak-topic drills, mistake journal). Remaining v0.4 backlog: GitHub journal sync, weekly email digest. See `docs/ROADMAP.md` (local) for the full plan.
 

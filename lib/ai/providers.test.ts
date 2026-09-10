@@ -115,9 +115,26 @@ describe("validateCustomBaseUrl", () => {
     expect(validateCustomBaseUrl("https://proxy.openrouter.ai/api/v1")).toBe("https://proxy.openrouter.ai/api/v1");
   });
 
-  it("accepts http only for local servers, with ports", () => {
-    expect(validateCustomBaseUrl("http://localhost:11434/v1")).toBe("http://localhost:11434/v1");
-    expect(validateCustomBaseUrl("http://127.0.0.1:1234")).toBe("http://127.0.0.1:1234");
+  it("accepts local servers only when the env flag is set, on standard ports", () => {
+    // Opt-in flag off: localhost is rejected (hosted deployments must not
+    // expose a server-side loopback scan oracle).
+    expect(validateCustomBaseUrl("http://localhost:11434/v1")).toBeNull();
+    expect(validateCustomBaseUrl("http://127.0.0.1:8080")).toBeNull();
+
+    // Flag on: standard ports accepted, scan-surface ports still rejected.
+    process.env.ALLOW_LOCAL_AI_BASE_URL = "1";
+    try {
+      expect(validateCustomBaseUrl("http://localhost:8080/v1")).toBe("http://localhost:8080/v1");
+      expect(validateCustomBaseUrl("http://127.0.0.1")).toBe("http://127.0.0.1");
+      expect(validateCustomBaseUrl("http://localhost:1234")).toBeNull(); // non-standard port
+      expect(validateCustomBaseUrl("http://[::1]:8080")).toBe("http://[::1]:8080");
+    } finally {
+      delete process.env.ALLOW_LOCAL_AI_BASE_URL;
+    }
+  });
+
+  it("rejects non-standard ports on allowlisted remote hosts", () => {
+    expect(validateCustomBaseUrl("https://api.groq.com:8443/openai/v1")).toBeNull();
   });
 
   it("rejects non-allowlisted hosts, IPs, and SSRF vectors", () => {

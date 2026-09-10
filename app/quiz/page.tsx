@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
@@ -8,6 +8,7 @@ import { Grade } from "@/lib/spaced/repetition";
 import { cardsToAnkiTxt } from "@/lib/export/anki";
 import { downloadText } from "@/lib/export/download";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { toast } from "@/components/Toast";
 
 type QuizCard = {
   id: string;
@@ -59,7 +60,14 @@ function QuizPage() {
   const [savingAnswer, setSavingAnswer] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  // Monotonic sequence for deck loads — a response only applies if it is
+  // still the latest request (see loadCards).
+  const loadSeq = useRef(0);
 
+  // loadCards is called on mount and on every filter/view change; a cancelled
+  // flag keeps a slow older response from overwriting a newer one (fetch
+  // order isn't guaranteed), and res.ok turns API errors into a visible
+  // message instead of a silently empty deck.
   const loadCards = useCallback(() => {
     // Quiz cards are per-account; skip the doomed 401 request when
     // signed out — the SignInPrompt covers that case instead.
@@ -69,15 +77,28 @@ function QuizPage() {
     if (problemFilter) params.set("problem", problemFilter);
     if (view === "due") params.set("due", "1");
     if (view === "mistakes") params.set("mistakes", "1");
+    const run = ++loadSeq.current;
     fetch(`/api/quiz?${params}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error ?? "Could not load your quiz deck.");
+        return d as { cards?: QuizCard[] };
+      })
       .then((d) => {
+        if (run !== loadSeq.current) return; // a newer load superseded this one
         setAllCards(d.cards ?? []);
         setQueue(d.cards ?? []);
         setReviewed(0);
+        setNotice(null);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((e) => {
+        if (run !== loadSeq.current) return;
+        setAllCards([]);
+        setQueue([]);
+        setNotice((e as Error).message);
+        setLoading(false);
+      });
   }, [topicFilter, problemFilter, view, status]);
 
   useEffect(() => {
@@ -88,13 +109,17 @@ function QuizPage() {
     setFocusLoading(true);
     try {
       const res = await fetch("/api/quiz?focus=weakest");
-      const d: { cards?: QuizCard[]; focus?: string[] } = await res.json();
+      const d: { cards?: QuizCard[]; focus?: string[]; error?: string } = await res
+        .json()
+        .catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Could not build a focus session.");
       setQueue(d.cards ?? []);
       setFocusTopics(d.focus ?? []);
       setReviewed(0);
+      setNotice(null);
       setLoading(false);
-    } catch {
-      setNotice("Could not build a focus session.");
+    } catch (e) {
+      setNotice((e as Error).message);
     } finally {
       setFocusLoading(false);
     }
@@ -147,7 +172,7 @@ function QuizPage() {
       });
       setAllCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, lapseCount } : c)));
     } catch (e) {
-      setNotice((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 
@@ -162,10 +187,9 @@ function QuizPage() {
       if (!res.ok) throw new Error((await res.json()).error ?? "Save failed.");
       setQueue((q) => q.map((c) => (c.id === card.id ? { ...c, answer: answerDraft.trim() || null } : c)));
       setAllCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, answer: answerDraft.trim() || null } : c)));
-      setNotice("Answer saved.");
-      setTimeout(() => setNotice(null), 2000);
+      toast.success("Answer saved.");
     } catch (e) {
-      setNotice((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSavingAnswer(false);
     }

@@ -4,6 +4,16 @@
 
 import type { CardState } from "@/lib/spaced/repetition";
 
+/**
+ * Parses a timestamp that may be legacy SQLite `datetime('now')` format
+ * ("YYYY-MM-DD HH:MM:SS", UTC, space separator — parsed as LOCAL by JS) or
+ * unified ISO ("...T...Z"). Both resolve to the correct UTC instant.
+ */
+export function parseDbTimestamp(raw: string): number {
+  const iso = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
+  return new Date(iso).getTime();
+}
+
 /** One row per q-tagged note, joined with its problem + card state. */
 export type ProgressCardRow = {
   noteId: string;
@@ -122,12 +132,12 @@ export function computeProgressStats(
     heat.set(key, e);
   };
   for (const p of problems) {
-    const ts = new Date(p.createdAt).getTime();
+    const ts = parseDbTimestamp(p.createdAt);
     if (!Number.isNaN(ts)) bump(dayKey(ts), "problems");
   }
   for (const c of cards) {
     if (!c.lastReviewed) continue;
-    const ts = new Date(c.lastReviewed).getTime();
+    const ts = parseDbTimestamp(c.lastReviewed);
     if (!Number.isNaN(ts)) bump(dayKey(ts), "reviews");
   }
 

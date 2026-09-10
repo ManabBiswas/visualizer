@@ -70,29 +70,48 @@ export function FlowchartPanel({
     };
   }, [handlerName, onNodeHover]);
 
+  // Mermaid render ONLY on diagram/theme changes. Cursor moves (activeNodeId)
+  // and the arrow-anim toggle (animated) are handled by the cheap DOM-pass
+  // effects below — re-rendering mermaid on every keystroke would blank the
+  // panel and burn ~200ms per render. Both are read through refs so they
+  // stay out of the dependency array.
+  const renderSeq = useRef(0);
+  const activeNodeRef = useRef(activeNodeId);
+  const animatedRef = useRef(animated);
+  useEffect(() => {
+    activeNodeRef.current = activeNodeId;
+    animatedRef.current = animated;
+  }, [activeNodeId, animated]);
   useEffect(() => {
     if (!scopedDiagram || !containerRef.current) return;
     setError(null);
     setRendered(false);
     ensureMermaid(theme);
     const id = `flowchart-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const seq = ++renderSeq.current;
     mermaid
       .render(id, scopedDiagram)
       .then(({ svg }) => {
+        // Staleness guard: a newer render (method/theme switch) superseded
+        // this one — don't clobber the newer SVG with the older result.
+        if (seq !== renderSeq.current) return;
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
           // Native hover tooltips with the full untruncated node text.
           const svgEl = containerRef.current.querySelector("svg");
           if (svgEl) {
             attachSvgTooltips(svgEl as SVGSVGElement, scoped?.tooltips ?? new Map());
-            highlightNode(svgEl as SVGSVGElement, activeNodeId);
-            if (animated) attachEdgeDots(svgEl as SVGSVGElement);
+            highlightNode(svgEl as SVGSVGElement, activeNodeRef.current);
+            if (animatedRef.current) attachEdgeDots(svgEl as SVGSVGElement);
           }
           setRendered(true);
         }
       })
-      .catch((e) => setError(String(e)));
-  }, [scopedDiagram, scoped, theme, activeNodeId, animated]);
+      .catch((e) => {
+        if (seq !== renderSeq.current) return; // stale error — ignore
+        setError(String(e));
+      });
+  }, [scopedDiagram, scoped, theme]);
 
   // Toggle dots on/off without a full mermaid re-render (expensive) — just
   // add/remove them on the already-rendered SVG.
