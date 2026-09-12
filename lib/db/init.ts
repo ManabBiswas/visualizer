@@ -71,6 +71,21 @@ export function withDb<T>(op: (database: DatabaseConnection) => T): T {
   }
 }
 
+// Test seam: route integration tests run against a throwaway in-memory
+// database instead of codelens.db / Turso. The handle swaps before any
+// route is invoked and resets to null afterwards, so production code paths
+// (getDb lazy-connect + migrate) are fully exercised.
+export function __setDbForTests(next: Database.Database | null): void {
+  if (db) {
+    try {
+      db.close();
+    } catch {
+      // ignore double-close of an already-dead handle
+    }
+  }
+  db = next;
+}
+
 // Schema v2 (multi-user): problems are owned by a GitHub-authenticated user.
 // Exported so tests can run it against throwaway databases.
 export function migrate(db: Database.Database): void {

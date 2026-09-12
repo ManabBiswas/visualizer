@@ -35,7 +35,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
       const analysis = db
         .prepare(
-          "SELECT method_name, time_complexity, space_complexity, time_confidence, space_confidence, reasoning, created_at FROM analyses WHERE problem_id = ? ORDER BY created_at DESC LIMIT 1",
+          "SELECT method_name, time_complexity, space_complexity, time_confidence, space_confidence, created_at FROM analyses WHERE problem_id = ? ORDER BY created_at DESC LIMIT 1",
         )
         .get(id);
       const notes = db

@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import mermaid from "mermaid";
-import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
+import { ensureMermaid } from "./mermaidSetup";
+import { useDiagramExport } from "./useDiagramExport";
 import { PanZoom } from "./PanZoom";
-import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import { attachSvgTooltips, type TooltipMap } from "@/lib/flowchart/tooltips";
 import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
 import { useArrowAnimation } from "@/lib/animation";
-import { toast } from "@/components/Toast";
 
 export function CallGraphPanel({
   diagram,
@@ -31,7 +29,6 @@ export function CallGraphPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const rawId = useId();
   const handlerName = useMemo(
@@ -54,6 +51,12 @@ export function CallGraphPanel({
     };
   }, [handlerName, onMethodClick]);
 
+  // Shared export actions — always light-themed, toast on failure.
+  const { exporting, exportPng, exportSvg } = useDiagramExport(() => {
+    const light = diagramLight ?? diagram;
+    return light ? light.replaceAll("onCallGraphNodeClick", handlerName) : null;
+  }, name ?? "callgraph");
+
   // Mermaid render only on diagram/theme change; the arrow-anim toggle is
   // applied by the cheap DOM-pass effect below (no re-render needed), so
   // `animated` is read through a ref instead of a dependency.
@@ -66,14 +69,14 @@ export function CallGraphPanel({
     if (!scopedDiagram || !containerRef.current) return;
     setError(null);
     setRendered(false);
-    ensureMermaid(theme);
     const id = `callgraph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const seq = ++renderSeq.current;
-    mermaid
-      .render(id, scopedDiagram)
+    let cancelled = false;
+    ensureMermaid(theme)
+      .then((mermaid) => mermaid.render(id, scopedDiagram))
       .then(({ svg }) => {
         // Staleness guard: a newer render superseded this one.
-        if (seq !== renderSeq.current) return;
+        if (seq !== renderSeq.current || cancelled) return;
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
           // Signature + time/space tooltips on hover.
@@ -87,9 +90,12 @@ export function CallGraphPanel({
         }
       })
       .catch((e) => {
-        if (seq !== renderSeq.current) return; // stale error — ignore
+        if (seq !== renderSeq.current || cancelled) return; // stale error — ignore
         setError(String(e));
       });
+    return () => {
+      cancelled = true;
+    };
   }, [scopedDiagram, theme, tooltips]);
 
   // Toggle dots on/off without re-rendering mermaid.
@@ -100,41 +106,6 @@ export function CallGraphPanel({
     if (animated) attachEdgeDots(svgEl as SVGSVGElement);
     else detachEdgeDots(svgEl as SVGSVGElement);
   }, [animated, rendered]);
-
-  // Exports are always light.
-  async function buildLightSvg(): Promise<SVGSVGElement | null> {
-    const light = diagramLight ?? diagram;
-    if (!light) return null;
-    const scoped = light.replaceAll("onCallGraphNodeClick", handlerName);
-    const source = await renderDiagramWithTheme(scoped, "light");
-    return svgFromString(source);
-  }
-
-  async function exportPng() {
-    setExporting(true);
-    try {
-      const svg = await buildLightSvg();
-      if (!svg) throw new Error("Could not render the diagram.");
-      await downloadPng(svg, name ?? "callgraph", "#ffffff");
-    } catch (e) {
-      toast.error(`PNG export failed: ${(e as Error).message}`);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  async function exportSvg() {
-    setExporting(true);
-    try {
-      const svg = await buildLightSvg();
-      if (!svg) throw new Error("Could not render the diagram.");
-      downloadSvg(svg, name ?? "callgraph");
-    } catch (e) {
-      toast.error(`SVG export failed: ${(e as Error).message}`);
-    } finally {
-      setExporting(false);
-    }
-  }
 
   if (!diagram) {
     return (

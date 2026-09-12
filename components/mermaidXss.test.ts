@@ -24,7 +24,6 @@ beforeAll(() => {
   }
 });
 
-import mermaid from "mermaid";
 import { ensureMermaid } from "@/components/mermaidSetup";
 import { generateFlowchart, generateFlowchartWithTooltips } from "@/lib/flowchart/generate";
 import { attachSvgTooltips } from "@/lib/flowchart/tooltips";
@@ -43,7 +42,7 @@ function methodWith(body: StatementNode[], comments: CommentTag[] = []): MethodI
 
 describe("mermaid XSS safety with hostile user code", () => {
   it("renders switch case labels containing HTML without emitting raw HTML in the SVG", { timeout: 60_000 }, async () => {
-    ensureMermaid();
+    const mermaid = await ensureMermaid();
     const hostile = '<img src=x onerror=alert(1)> <script>alert(2)</script> "break" `tick`';
     const diagram = generateFlowchart(
       methodWith([
@@ -66,7 +65,7 @@ describe("mermaid XSS safety with hostile user code", () => {
   });
 
   it("renders note comments containing HTML without emitting raw HTML in the SVG", { timeout: 60_000 }, async () => {
-    ensureMermaid();
+    const mermaid = await ensureMermaid();
     const hostile = '<a href="javascript:alert(1)">x</a> <svg onload=alert(2)> "q" </text>';
     const diagram = generateFlowchart(
       methodWith(
@@ -90,7 +89,7 @@ describe("mermaid XSS safety with hostile user code", () => {
   });
 
   it("emits tooltips as SVG <title> and renders them safely", { timeout: 60_000 }, async () => {
-    ensureMermaid();
+    await ensureMermaid();
     const fullCondition = "aVeryLongConditionExpression > someOtherValue && yetAnotherTerm != 42";
     const { diagram, tooltips } = generateFlowchartWithTooltips(
       methodWith([

@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import mermaid from "mermaid";
-import { ensureMermaid, renderDiagramWithTheme } from "./mermaidSetup";
+import { ensureMermaid } from "./mermaidSetup";
+import { useDiagramExport } from "./useDiagramExport";
 import { PanZoom } from "./PanZoom";
 import { generateFlowchartWithTooltips, FLOWCHART_LEGEND } from "@/lib/flowchart/generate";
 import { attachSvgTooltips, highlightNode } from "@/lib/flowchart/tooltips";
 import { attachEdgeDots, detachEdgeDots } from "@/lib/flowchart/edgeAnim";
 import { useArrowAnimation } from "@/lib/animation";
-import { toast } from "@/components/Toast";
-import { downloadPng, downloadSvg, svgFromString } from "@/lib/export/download";
 import { useTheme } from "@/lib/theme";
 import type { MethodIR } from "@/lib/ir";
 
@@ -36,7 +34,6 @@ export function FlowchartPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const name = method?.name;
 
@@ -70,6 +67,15 @@ export function FlowchartPanel({
     };
   }, [handlerName, onNodeHover]);
 
+  // Shared export actions — always light-themed, toast on failure.
+  const { exporting, exportPng, exportSvg } = useDiagramExport(() => {
+    if (!method) return null;
+    return generateFlowchartWithTooltips(method, "light").diagram.replaceAll(
+      "onFlowchartNodeClick",
+      handlerName,
+    );
+  }, `${name ?? "flowchart"}-flowchart`);
+
   // Mermaid render ONLY on diagram/theme changes. Cursor moves (activeNodeId)
   // and the arrow-anim toggle (animated) are handled by the cheap DOM-pass
   // effects below — re-rendering mermaid on every keystroke would blank the
@@ -86,15 +92,15 @@ export function FlowchartPanel({
     if (!scopedDiagram || !containerRef.current) return;
     setError(null);
     setRendered(false);
-    ensureMermaid(theme);
     const id = `flowchart-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const seq = ++renderSeq.current;
-    mermaid
-      .render(id, scopedDiagram)
+    let cancelled = false;
+    ensureMermaid(theme)
+      .then((mermaid) => mermaid.render(id, scopedDiagram))
       .then(({ svg }) => {
         // Staleness guard: a newer render (method/theme switch) superseded
         // this one — don't clobber the newer SVG with the older result.
-        if (seq !== renderSeq.current) return;
+        if (seq !== renderSeq.current || cancelled) return;
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
           // Native hover tooltips with the full untruncated node text.
@@ -108,9 +114,12 @@ export function FlowchartPanel({
         }
       })
       .catch((e) => {
-        if (seq !== renderSeq.current) return; // stale error — ignore
+        if (seq !== renderSeq.current || cancelled) return; // stale error — ignore
         setError(String(e));
       });
+    return () => {
+      cancelled = true;
+    };
   }, [scopedDiagram, scoped, theme]);
 
   // Toggle dots on/off without a full mermaid re-render (expensive) — just
@@ -130,43 +139,6 @@ export function FlowchartPanel({
     const svgEl = containerRef.current?.querySelector("svg");
     if (svgEl) highlightNode(svgEl as SVGSVGElement, activeNodeId);
   }, [activeNodeId, rendered]);
-
-  // Exports are ALWAYS light, regardless of the current UI theme.
-  async function buildLightSvg(): Promise<SVGSVGElement | null> {
-    if (!method) return null;
-    const lightDiagram = generateFlowchartWithTooltips(method, "light").diagram.replaceAll(
-      "onFlowchartNodeClick",
-      handlerName
-    );
-    const source = await renderDiagramWithTheme(lightDiagram, "light");
-    return svgFromString(source);
-  }
-
-  async function exportPng() {
-    setExporting(true);
-    try {
-      const svg = await buildLightSvg();
-      if (!svg) throw new Error("Could not render the diagram.");
-      await downloadPng(svg, `${name ?? "flowchart"}-flowchart`, "#ffffff");
-    } catch (e) {
-      toast.error(`PNG export failed: ${(e as Error).message}`);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  async function exportSvg() {
-    setExporting(true);
-    try {
-      const svg = await buildLightSvg();
-      if (!svg) throw new Error("Could not render the diagram.");
-      downloadSvg(svg, `${name ?? "flowchart"}-flowchart`);
-    } catch (e) {
-      toast.error(`SVG export failed: ${(e as Error).message}`);
-    } finally {
-      setExporting(false);
-    }
-  }
 
   if (!method) {
     return (

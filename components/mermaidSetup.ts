@@ -1,9 +1,6 @@
-import mermaid from "mermaid";
 import type { Theme } from "@/lib/theme";
 
-// Shared Mermaid config for every diagram panel.
-// htmlLabels MUST stay false: HTML labels render as <foreignObject>, which
-// taints the canvas during PNG export and breaks downloads.
+type Mermaid = typeof import("mermaid").default;
 
 const MONO = "'Cascadia Code', Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace";
 
@@ -18,6 +15,7 @@ const BASE = {
     nodeSpacing: 35,
     rankSpacing: 45,
     padding: 10,
+    useMaxWidth: false,
   },
 };
 
@@ -47,33 +45,57 @@ const THEME_VARIABLES: Record<Theme, Record<string, string>> = {
 };
 
 let currentTheme: Theme | null = null;
+let mermaidPromise: Promise<Mermaid> | null = null;
+
+/* Loads mermaid once (shared promise — concurrent callers await the same chunk) and returns the default export. Panels use this instead of a static import so the ~1MB library stays out of the initial bundle and is fetched only when a diagram is actually about to render.
+ */
+export function loadMermaid(): Promise<Mermaid> {
+  if (!mermaidPromise) {
+    mermaidPromise = import("mermaid").then((m) => m.default);
+  }
+  return mermaidPromise;
+}
 
 /** Initialize (or re-initialize) Mermaid for a specific theme. */
-export function configureMermaid(theme: Theme) {
+function configureMermaid(mermaid: Mermaid, theme: Theme) {
   currentTheme = theme;
   mermaid.initialize({ ...BASE, themeVariables: THEME_VARIABLES[theme] });
 }
 
 /** Idempotent per theme — cheap to call on every render. */
-export function ensureMermaid(theme: Theme = "dark") {
-  if (currentTheme === theme) return;
-  configureMermaid(theme);
+export async function ensureMermaid(theme: Theme = "dark"): Promise<Mermaid> {
+  const mermaid = await loadMermaid();
+  if (currentTheme !== theme) {
+    configureMermaid(mermaid, theme);
+  }
+  return mermaid;
 }
 
-/**
- * Render a diagram with an explicit theme and return the raw SVG string.
- * Used for exports, which must always be light regardless of the UI theme.
- * Restores the previous display theme afterwards so on-screen panels are
- * unaffected.
+let exportCounter = 0;
+
+/* Render a diagram and return the raw SVG string. `theme` selects the skin; exports pass "light" regardless of the UI theme. `onRendered` restores the previous display theme so on-screen panels are unaffected.
  */
-export async function renderDiagramWithTheme(diagram: string, theme: Theme): Promise<string> {
+export async function renderDiagram(
+  diagram: string,
+  theme: Theme,
+  idPrefix: string,
+): Promise<string> {
   const previous = currentTheme;
-  configureMermaid(theme);
-  const id = `export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const mermaid = await loadMermaid();
+  configureMermaid(mermaid, theme);
+  const id = `mermaid-${idPrefix}-${Date.now()}-${exportCounter++}`;
   try {
     const { svg } = await mermaid.render(id, diagram);
     return svg;
   } finally {
-    configureMermaid(previous ?? "dark");
+    if (previous && previous !== theme) {
+      configureMermaid(mermaid, previous);
+    }
   }
+}
+
+/* Back-compat wrapper: render a diagram with an explicit theme (exports, which must always be light regardless of the UI theme) and return the raw SVG string. Restores the previous display theme afterwards.
+ */
+export async function renderDiagramWithTheme(diagram: string, theme: Theme): Promise<string> {
+  return renderDiagram(diagram, theme, "export");
 }
