@@ -95,6 +95,22 @@ const FIXTURES: Record<string, string> = {
         dfs(grid, i - 1, j);
     }
 }`,
+  bubbleSort: `class Solution {
+    // Compound loop bound: inner loop limited by the outer loop's variable.
+    void bubbleSort(int[] a) {
+        for (int i = 0; i < a.length - 1; i++) {
+            for (int j = 0; j < a.length - i - 1; j++) {
+                if (a[j] > a[j + 1]) { int t = a[j]; a[j] = a[j + 1]; a[j + 1] = t; }
+            }
+        }
+    }
+    // Depleting halving loop: the loop var is a parameter.
+    int stepsToZero(int n) {
+        int steps = 0;
+        while (n > 1) { n = n / 2; steps++; }
+        return steps;
+    }
+}`,
 };
 
 function loopBoundTypes(nodes: StatementNode[]): string[] {
@@ -171,4 +187,42 @@ describe.skipIf(!canRunJvm)("TS parser parity with the JVM CLI", () => {
       }
     });
   }
+
+  it("both engines classify compound and depleting loop bounds identically", () => {
+    const src = `class T {
+        int inner(int[] a) {
+            int s = 0;
+            for (int i = 0; i < a.length; i++) {
+                for (int j = 0; j < i - 1; j++) { s += a[j]; }
+            }
+            return s;
+        }
+        int halve(int n) {
+            int steps = 0;
+            while (n > 1) { n = n / 2; steps++; }
+            return steps;
+        }
+        int fixed(int[] a) {
+            int s = 0;
+            for (int i = 0; i < 10; i++) { s += a[i]; }
+            return s;
+        }
+    }`;
+    const ts = parseJavaTs(src);
+    const jvm = runJvmParser(src);
+
+    const bounds = (ir: ProgramIR, m: string) => loopBoundTypes(methodByName(ir, m).body);
+    // Regression guards for the M7-4 accuracy fixes — both engines agree AND
+    // the classifications are the corrected ones:
+    // outer loop is input-dependent (a.length); inner bounded by outer var - 1
+    // is NOT constant.
+    expect(bounds(ts, "inner")).toEqual(["input-dependent", "input-dependent"]);
+    expect(bounds(jvm, "inner")).toEqual(["input-dependent", "input-dependent"]);
+    // halving loop with a param loop-var is parameter, not constant.
+    expect(bounds(ts, "halve")).toEqual(["parameter"]);
+    expect(bounds(jvm, "halve")).toEqual(["parameter"]);
+    // true fixed-iteration cap stays constant.
+    expect(bounds(ts, "fixed")).toEqual(["constant"]);
+    expect(bounds(jvm, "fixed")).toEqual(["constant"]);
+  });
 });

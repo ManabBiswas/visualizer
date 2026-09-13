@@ -71,8 +71,22 @@ export function classifyLoopBound(
   if (/\w\.length\b/.test(collapsed) || /\w\.size\(\)/.test(collapsed)) return "input-dependent";
 
   const identifiers = (collapsed.match(/[A-Za-z_]\w*/g) ?? []).filter((id) => !LOOP_KEYWORDS.has(id));
-  if (identifiers.length > 0 && identifiers.every((id) => loopVarNames.includes(id)) && /\d/.test(collapsed)) {
-    return "constant";
+  // A loop variable that is itself a parameter (e.g. `while (n > 1) { n /= 2; }`)
+  // depletes toward the literal — the trip count is the parameter's value, not
+  // a constant. Params take priority over the loop-var constant rule.
+  if (identifiers.length > 0 && identifiers.every((id) => loopVarNames.includes(id))) {
+    if (identifiers.some((id) => paramNames.includes(id))) return "parameter";
+    // `var OP literal` is the only shape that can be a fixed-iteration cap.
+    // With a small literal (0/1/2) it's a depleting counter (countdowns,
+    // stack drains) — the bound is the var's initial value, which the parser
+    // can't see → input-dependent. Larger literals (i < 10) → constant.
+    // Compound bounds (i < j - 1) are driven by another loop variable →
+    // input-dependent, never constant.
+    const literalBound = collapsed.match(/^(?:[\w$]+)\s*(?:<=|<|>=|>|==|!=)\s*(\d+)$/);
+    if (literalBound) {
+      return Number(literalBound[1]) <= 2 ? "input-dependent" : "constant";
+    }
+    return "input-dependent";
   }
   if (identifiers.some((id) => paramNames.includes(id))) return "parameter";
   if (identifiers.length > 0) return "input-dependent";
@@ -432,6 +446,14 @@ export function parseJavaTs(source: string): ProgramIR {
     // as a parse problem, not an internal failure.
     if (/call stack/i.test(msg)) {
       throw new Error("Parse error: source is too deeply nested.");
+    }
+    // Chevrotain reports "Sad sad panda, parsing errors detected in
+    // line: N, column: M!" — translate to a clean, actionable message.
+    const pos = msg.match(/line:\s*(\d+),\s*column:\s*(\d+)/);
+    if (pos) {
+      throw new Error(
+        `Java syntax error at line ${pos[1]}, column ${pos[2]} — check for a missing bracket, semicolon, or type near that spot.`,
+      );
     }
     throw new Error(`Parse error: ${msg.split("\n")[0]}`);
   }

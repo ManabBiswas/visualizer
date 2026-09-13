@@ -47,9 +47,10 @@ beforeAll(async () => {
   expect(res.status).toBe(200);
 
   // Seed one quiz card (parser-extracted q-tag note) owned by alice.
-  aliceQuizNoteId = currentTestDb()
+  const noteRow = currentTestDb()
     .prepare("SELECT id FROM notes WHERE problem_id = ? AND tag_type = 'q'")
-    .get(aliceProblemId)!.id as string;
+    .get(aliceProblemId) as { id: string };
+  aliceQuizNoteId = noteRow.id;
   expect(aliceQuizNoteId).toBeTruthy();
 }, 120000);
 

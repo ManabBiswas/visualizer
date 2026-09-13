@@ -141,7 +141,7 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
               <select
                 value=""
                 onChange={(e) => addTopic(e.target.value)}
-                className="bg-transparent text-text-muted outline-none hover:text-on-surface"
+                className="rounded bg-transparent px-1 text-text-muted outline-none hover:text-on-surface focus-visible:ring-1 focus-visible:ring-primary"
                 aria-label="Add topic"
               >
                 <option value="">+ Topic</option>

@@ -129,8 +129,8 @@ describe("parseJavaTs", () => {
     expect(expr).toBeDefined();
   });
 
-  it("throws a clean parse error on invalid Java", () => {
-    expect(() => parseJavaTs("class { broken")).toThrow(/Parse error/);
+  it("throws a clean parse error with line/column on invalid Java", () => {
+    expect(() => parseJavaTs("class { broken")).toThrow(/Java syntax error at line 1, column 7/);
   });
 
   it("feeds the complexity analyzer: binary search -> O(log n), merge sort -> O(n log n)", () => {
@@ -181,5 +181,32 @@ describe("classifyLoopBound", () => {
     expect(classifyLoopBound("true", [], [])).toBe("input-dependent");
     expect(classifyLoopBound("", [], [])).toBe("unknown");
     expect(classifyLoopBound("p.next != null", [], [])).toBe("input-dependent");
+  });
+
+  it("classifies depleting and compound bounds in real pipeline shapes", () => {
+    // While/do-while loops emit loopVarNames=[] — the shapes the pipeline
+    // actually produces for depleting loops.
+    expect(classifyLoopBound("n > 1", [], ["n"])).toBe("parameter");
+    expect(classifyLoopBound("count > 0", [], [])).toBe("input-dependent");
+    // For-loops pass header-declared vars. A loop var that shadows a param
+    // depletes toward the literal: parameter (param names win).
+    expect(classifyLoopBound("x >= 0", ["x"], ["x"])).toBe("parameter");
+    expect(classifyLoopBound("n > 1", ["n"], ["n"])).toBe("parameter");
+    // Fixed-iteration caps with larger literals stay constant; small-literal
+    // countdowns are depleting (initial value unknown) → input-dependent.
+    expect(classifyLoopBound("i < 10", ["i"], [])).toBe("constant");
+    expect(classifyLoopBound("i <= 2", ["i"], [])).toBe("input-dependent");
+    expect(classifyLoopBound("rounds < 5", ["rounds"], [])).toBe("constant");
+    // Compound bounds (inner loop limited by an outer var ± k) are driven
+    // by another loop variable, never a constant cap.
+    expect(classifyLoopBound("j < i - 1", ["i", "j"], [])).toBe("input-dependent");
+    expect(classifyLoopBound("j < i + 1", ["i", "j"], [])).toBe("input-dependent");
+    expect(classifyLoopBound("i < v2", ["i"], [])).toBe("input-dependent");
+  });
+
+  it("non-loop-var identifiers route by params", () => {
+    expect(classifyLoopBound("i < n", ["i"], ["n"])).toBe("parameter");
+    expect(classifyLoopBound("i < arr.length", ["i"], [])).toBe("input-dependent");
+    expect(classifyLoopBound("10 > 0", [], [])).toBe("constant");
   });
 });

@@ -82,7 +82,7 @@ export function RunConsole({ code }: { code: string }) {
             }}
             spellCheck={false}
             placeholder={"5\n1 2 3 4 5"}
-            className="min-h-0 flex-1 resize-none bg-transparent p-3 font-mono text-code-sm text-on-surface outline-none placeholder:text-text-muted/50"
+            className="min-h-0 flex-1 resize-none bg-transparent p-3 font-mono text-code-sm text-on-surface outline-none placeholder:text-text-muted/50 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary"
           />
         </div>
 

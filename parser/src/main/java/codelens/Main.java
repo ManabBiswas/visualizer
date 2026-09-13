@@ -371,7 +371,24 @@ public class Main {
         }
 
         boolean hasDigit = c.matches(".*\\d.*");
-        if (!identifiers.isEmpty() && loopVars.containsAll(identifiers) && hasDigit) return "constant";
+        if (!identifiers.isEmpty() && loopVars.containsAll(identifiers)) {
+            // A loop variable that is itself a parameter depletes toward the
+            // literal — the trip count is the parameter's value. Params win.
+            for (String id : identifiers) {
+                if (paramNames.contains(id)) return "parameter";
+            }
+            // `var OP literal` is the only shape that can be a fixed-iteration
+            // cap. Small literals (0/1/2) are depleting counters (countdowns,
+            // stack drains) → input-dependent. Larger literals → constant.
+            // Compound bounds (i < j - 1) are driven by another loop variable
+            // → input-dependent, never constant.
+            java.util.regex.Matcher lit = java.util.regex.Pattern
+                .compile("^[\\w$]+\\s*(?:<=|<|>=|>|==|!=)\\s*(\\d+)$").matcher(c);
+            if (lit.matches()) {
+                return Integer.parseInt(lit.group(1)) <= 2 ? "input-dependent" : "constant";
+            }
+            return "input-dependent";
+        }
         for (String id : identifiers) {
             if (paramNames.contains(id)) return "parameter";
         }

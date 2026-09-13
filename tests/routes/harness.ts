@@ -120,7 +120,7 @@ export async function sessionCookies(user: { githubId: string; login: string }):
 // actionAsyncStorage.run(actionStore) > workUnitAsyncStorage.run(requestStore)
 // > workAsyncStorage.run(workStore) > handler(req, ctx).
 // ---------------------------------------------------------------------------
-type RouteContext = { params: Promise<Record<string, string>> };
+type RouteContext = { params: Promise<any> };
 // `never` params: any real handler signature (NextRequest, Request, ...) is
 // assignable to this shape, so callers can pass route exports directly.
 type Handler = (req: never, ctx: RouteContext) => Promise<Response>;

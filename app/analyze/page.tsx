@@ -14,6 +14,7 @@ import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
 import { SamplePicker } from "@/components/SamplePicker";
 import { AiQuizDrawer } from "@/components/AiQuizDrawer";
+import { AnalysisSkeleton } from "@/components/Skeleton";
 import { SAMPLES, findSample, type Sample } from "@/data/samples";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
@@ -161,8 +162,24 @@ function EditorPage() {
           problem: effectiveMeta.name ? effectiveMeta : undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Analysis failed.");
+      let data: {
+        results?: AnalyzeResult[];
+        callGraph?: string | null;
+        callGraphLight?: string | null;
+        callGraphTooltips?: Record<string, string> | null;
+        savedProblemId?: string | null;
+        saveWarning?: string | null;
+        error?: string;
+      };
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Analysis failed (HTTP ${res.status}).`);
+      }
+      if (!res.ok) throw new Error(data.error ?? `Analysis failed (HTTP ${res.status}).`);
+      if (!Array.isArray(data.results)) {
+        throw new Error("Analysis failed: the server returned an unexpected response.");
+      }
       setResults(data.results);
       setCallGraph(data.callGraph ?? null);
       setCallGraphLight(data.callGraphLight ?? null);
@@ -356,41 +373,47 @@ function EditorPage() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden">
-            {tab === "flowchart" && (
-              <FlowchartPanel
-                method={current?.method ?? null}
-                onNodeHover={(line) => line && jumpToLine(line)}
-                activeLine={activeLine}
+            {loading ? (
+              <AnalysisSkeleton
+                variant={tab === "flowchart" || tab === "callgraph" ? "diagram" : tab === "blocks" ? "table" : "list"}
               />
-            )}
-            {tab === "blocks" && (
-              <WalkthroughPanel
-                body={current?.method.body}
-                onJump={jumpToLine}
-                blockComplexity={current?.blockComplexity}
-              />
-            )}
-            {tab === "callgraph" && callGraph && (
-              <CallGraphPanel
-                diagram={callGraph}
-                diagramLight={callGraphLight}
-                tooltips={callGraphTooltips}
-                name={meta.name || "problem"}
-                onMethodClick={(methodName) => {
-                  const idx = results.findIndex((r) => r.method.name === methodName);
-                  if (idx >= 0) {
-                    setActiveMethod(idx);
-                    setTab("flowchart");
-                  }
-                }}
-              />
-            )}
-            {tab === "complexity" && <ComplexityPanel result={current?.complexity ?? null} />}
-            {tab === "notes" && (
-              <div className="flex h-full flex-col gap-2 overflow-auto p-panel-padding">
-                {savedProblemId && current && current.method.comments.some((c) => c.tag === "q") && (
-                  <Link
-                    href={`/quiz?problem=${savedProblemId}`}
+            ) : (
+              <>
+                {tab === "flowchart" && (
+                  <FlowchartPanel
+                    method={current?.method ?? null}
+                    onNodeHover={(line) => line && jumpToLine(line)}
+                    activeLine={activeLine}
+                  />
+                )}
+                {tab === "blocks" && (
+                  <WalkthroughPanel
+                    body={current?.method.body}
+                    onJump={jumpToLine}
+                    blockComplexity={current?.blockComplexity}
+                  />
+                )}
+                {tab === "callgraph" && callGraph && (
+                  <CallGraphPanel
+                    diagram={callGraph}
+                    diagramLight={callGraphLight}
+                    tooltips={callGraphTooltips}
+                    name={meta.name || "problem"}
+                    onMethodClick={(methodName) => {
+                      const idx = results.findIndex((r) => r.method.name === methodName);
+                      if (idx >= 0) {
+                        setActiveMethod(idx);
+                        setTab("flowchart");
+                      }
+                    }}
+                  />
+                )}
+                {tab === "complexity" && <ComplexityPanel result={current?.complexity ?? null} />}
+                {tab === "notes" && (
+                  <div className="flex h-full flex-col gap-2 overflow-auto p-panel-padding">
+                    {savedProblemId && current && current.method.comments.some((c) => c.tag === "q") && (
+                      <Link
+                        href={`/quiz?problem=${savedProblemId}`}
                     className="self-start rounded bg-surface-container-high px-3 py-1 text-body-sm text-on-surface hover:text-primary"
                   >
                     Quiz these notes
@@ -446,6 +469,8 @@ function EditorPage() {
                   ))
                 )}
               </div>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -250,3 +250,21 @@
 @utility badge {
   @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-code-sm font-semibold;
 }
+
+/* Loading skeletons: panel placeholders shown while /api/analyze is in
+   flight. The shimmer respects reduced-motion (steady muted blocks). */
+@utility skeleton {
+  @apply rounded bg-surface-container-high;
+  animation: cl-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+@keyframes cl-shimmer {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.9; }
+}
