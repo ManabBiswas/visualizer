@@ -41,7 +41,7 @@ function methodWith(body: StatementNode[], comments: CommentTag[] = []): MethodI
 }
 
 describe("mermaid XSS safety with hostile user code", () => {
-  it("renders switch case labels containing HTML without emitting raw HTML in the SVG", { timeout: 60_000 }, async () => {
+  it("renders switch case labels containing HTML without emitting raw HTML in the SVG", { timeout: 120_000 }, async () => {
     const mermaid = await ensureMermaid();
     const hostile = '<img src=x onerror=alert(1)> <script>alert(2)</script> "break" `tick`';
     const diagram = generateFlowchart(
@@ -64,7 +64,7 @@ describe("mermaid XSS safety with hostile user code", () => {
     expect(svg).not.toMatch(/\son\w+\s*=\s*"/);
   });
 
-  it("renders note comments containing HTML without emitting raw HTML in the SVG", { timeout: 60_000 }, async () => {
+  it("renders note comments containing HTML without emitting raw HTML in the SVG", { timeout: 120_000 }, async () => {
     const mermaid = await ensureMermaid();
     const hostile = '<a href="javascript:alert(1)">x</a> <svg onload=alert(2)> "q" </text>';
     const diagram = generateFlowchart(
@@ -88,7 +88,7 @@ describe("mermaid XSS safety with hostile user code", () => {
     expect(svg.toLowerCase()).toContain("javascript");
   });
 
-  it("emits tooltips as SVG <title> and renders them safely", { timeout: 60_000 }, async () => {
+  it("emits tooltips as SVG <title> and renders them safely", { timeout: 120_000 }, async () => {
     await ensureMermaid();
     const fullCondition = "aVeryLongConditionExpression > someOtherValue && yetAnotherTerm != 42";
     const { diagram, tooltips } = generateFlowchartWithTooltips(

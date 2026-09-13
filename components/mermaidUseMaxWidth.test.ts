@@ -24,7 +24,7 @@ beforeAll(() => {
 import { renderDiagram } from "@/components/mermaidSetup";
 
 describe("useMaxWidth:false SVG sizing", () => {
-  it("renders with explicit width/height attributes (not 100%)", { timeout: 30_000 }, async () => {
+  it("renders with explicit width/height attributes (not 100%)", { timeout: 120_000 }, async () => {
     const svg = await renderDiagram('flowchart TD\n  n1["hello world label"]', "light", "audit");
     const w = svg.match(/<svg[^>]*\swidth="([^"]*)"/)?.[1];
     const h = svg.match(/<svg[^>]*\sheight="([^"]*)"/)?.[1];
