@@ -118,6 +118,7 @@ export function migrate(db: Database.Database): void {
       topic_tags TEXT NOT NULL DEFAULT '[]',
       difficulty TEXT CHECK(difficulty IN ('Easy','Medium','Hard')),
       source_code TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'java',
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       UNIQUE(user_id, name)
     );
@@ -185,4 +186,10 @@ export function migrate(db: Database.Database): void {
   // the index, slug lookups would silently degrade to table scans and the
   // UNIQUE protection would vanish.
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_problems_share_slug ON problems(share_slug) WHERE share_slug IS NOT NULL");
+
+  // v0.5: source language so saved problems re-parse correctly. Existing
+  // rows are all Java — NULL means "java" to readers.
+  if (!problemColumns.some((c) => c.name === "language")) {
+    db.exec("ALTER TABLE problems ADD COLUMN language TEXT");
+  }
 }

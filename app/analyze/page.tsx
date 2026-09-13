@@ -42,6 +42,23 @@ const EXAMPLE = `class Solution {
 }
 `;
 
+const EXAMPLE_PY = `def search(arr, target):
+    # why: binary search halves the search space each iteration
+    low, high = 0, len(arr) - 1
+    # q: why is a hash lookup O(1) here but the whole loop O(log n)?
+    while low <= high:
+        mid = low + (high - low) // 2  # note: mid belongs to the current range
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+`;
+
+type Language = "java" | "python";
+
 type AnalyzeResult = {
   className: string;
   method: MethodIR;
@@ -69,6 +86,7 @@ function EditorPage() {
   const sampleId = searchParams.get("sample");
 
   const [code, setCode] = useState(EXAMPLE);
+  const [language, setLanguage] = useState<Language>("java");
   const [meta, setMeta] = useState<ProblemMeta>({ name: "", link: "", topicTags: [], difficulty: "" });
   const [results, setResults] = useState<AnalyzeResult[]>([]);
   const [callGraph, setCallGraph] = useState<string | null>(null);
@@ -127,6 +145,8 @@ function EditorPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Problem not found."))))
       .then((d) => {
         setCode(d.problem.sourceCode);
+        if (d.problem.language === "python") setLanguage("python");
+        else setLanguage("java");
         setMeta({
           name: d.problem.name,
           link: d.problem.link ?? "",
@@ -149,8 +169,10 @@ function EditorPage() {
   // setMeta(), so reading the `meta` state here would see the PREVIOUS
   // problem's meta and upsert the sample under the old name — destroying the
   // old problem's analyses/notes (the server upserts by name).
-  async function analyze(source: string = code, metaOverride?: ProblemMeta) {
+  // Same for language: languageOverride flows from loadSample.
+  async function analyze(source: string = code, metaOverride?: ProblemMeta, languageOverride?: Language) {
     const effectiveMeta = metaOverride ?? meta;
+    const effectiveLanguage = languageOverride ?? language;
     setLoading(true);
     setError(null);
     try {
@@ -159,6 +181,7 @@ function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           source,
+          language: effectiveLanguage,
           problem: effectiveMeta.name ? effectiveMeta : undefined,
         }),
       });
@@ -204,7 +227,9 @@ function EditorPage() {
       topicTags: [...sample.topicTags],
       difficulty: sample.difficulty,
     };
+    const sampleLanguage: Language = sample.language === "python" ? "python" : "java";
     setCode(sample.source);
+    setLanguage(sampleLanguage);
     setMeta(sampleMeta);
     setResults([]);
     setCallGraph(null);
@@ -214,7 +239,7 @@ function EditorPage() {
     setSaveWarning(null);
     setError(null);
     setSampleOpen(false);
-    void analyze(sample.source, sampleMeta);
+    void analyze(sample.source, sampleMeta, sampleLanguage);
   }
 
   const current = results[activeMethod];
@@ -253,7 +278,36 @@ function EditorPage() {
           <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
             <div className="flex items-center gap-2">
               <span className="label-caps">Editor</span>
-              <span className="font-mono text-code-sm text-text-muted">Solution.java</span>
+              <span className="font-mono text-code-sm text-text-muted">
+                {language === "python" ? "solution.py" : "Solution.java"}
+              </span>
+              <div className="ml-2 flex overflow-hidden rounded border border-panel-border" role="group" aria-label="Source language">
+                {(["java", "python"] as Language[]).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => {
+                      if (language === l) return;
+                      setLanguage(l);
+                      setCode(l === "python" ? EXAMPLE_PY : EXAMPLE);
+                      setResults([]);
+                      setCallGraph(null);
+                      setCallGraphLight(null);
+                      setCallGraphTooltips(null);
+                      setSavedProblemId(null);
+                      setSaveWarning(null);
+                      setError(null);
+                    }}
+                    className={`px-2.5 py-0.5 font-mono text-code-sm ${
+                      language === l
+                        ? "bg-primary-container text-on-primary-container"
+                        : "text-text-muted hover:bg-surface-container-high hover:text-on-surface"
+                    }`}
+                    title={l === "python" ? "Switch to Python analysis" : "Switch to Java analysis"}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -267,7 +321,7 @@ function EditorPage() {
               >
                 {sampleOpen ? "Samples ▾" : "Try a sample ▸"}
               </button>
-              {RUN_ENABLED && (
+              {RUN_ENABLED && language === "java" && (
                 <button
                   onClick={() => setConsoleOpen((o) => !o)}
                   className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
@@ -306,13 +360,14 @@ function EditorPage() {
             <CodeEditor
               value={code}
               onChange={setCode}
+              language={language === "python" ? "python" : "java"}
               onMount={(editor) => {
                 editorRef.current = editor;
               }}
               onCursorChange={setActiveLine}
             />
           </div>
-          {consoleOpen && RUN_ENABLED && <RunConsole code={code} />}
+          {consoleOpen && RUN_ENABLED && language === "java" && <RunConsole code={code} />}
           {saveWarning && (
             <div className="flex shrink-0 items-center gap-3 border-t border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-on-surface-variant">
               <span className="min-w-0 flex-1">{saveWarning}</span>
@@ -461,7 +516,8 @@ function EditorPage() {
                     <code className="font-mono text-code-sm text-note-badge">{"// note: ..."}</code>,{" "}
                     <code className="font-mono text-code-sm text-why-badge">{"// why: ..."}</code>, or{" "}
                     <code className="font-mono text-code-sm text-complexity-badge">{"// complexity: ..."}</code>{" "}
-                    in your code to build your revision notes. They also appear inside the flowchart.
+                    (or the same tags with <code className="font-mono text-code-sm">{"#"}</code> in Python) to build
+                    your revision notes. They also appear inside the flowchart.
                   </div>
                 ) : (
                   current.method.comments.map((tagItem, i) => (

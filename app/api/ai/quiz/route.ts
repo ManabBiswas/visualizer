@@ -127,12 +127,12 @@ export async function POST(req: NextRequest) {
   // Owner-scoped load of the problem + its latest analysis batch (the IR
   // rides inside analyses.ir_json; a foreign problem is indistinguishable
   // from a missing one). withDb heals a stale Turso stream + retries once.
-  let problem: { name: string; difficulty: string | null; topic_tags: string; source_code: string };
+  let problem: { name: string; difficulty: string | null; topic_tags: string; source_code: string; language: string | null };
   let analyses: Array<{ method_name: string | null; time_complexity: string | null; space_complexity: string | null; ir_json: string | null }>;
   try {
     const loaded = withDb((db) => {
       const p = db
-        .prepare("SELECT name, difficulty, topic_tags, source_code FROM problems WHERE id = ? AND user_id = ?")
+        .prepare("SELECT name, difficulty, topic_tags, source_code, language FROM problems WHERE id = ? AND user_id = ?")
         .get(problemId, userId) as typeof problem | undefined;
       if (!p) return null;
       // Only the newest analysis batch carries the IR the prompt needs;
@@ -178,6 +178,7 @@ export async function POST(req: NextRequest) {
     analyses,
     problem.source_code,
     cardCount,
+    problem.language === "python" ? "python" : "java",
   );
   const request = buildRequest(provider, effectiveKey, prompt, custom);
 

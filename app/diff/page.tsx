@@ -32,10 +32,30 @@ const OPTIMIZED_EXAMPLE = `class Solution {
 }
 `;
 
+const BRUTE_EXAMPLE_PY = `def two_sum(nums, target):
+    for i in range(len(nums)):
+        for j in range(i + 1, len(nums)):
+            if nums[i] + nums[j] == target:
+                return [i, j]
+    return []
+`;
+
+const OPTIMIZED_EXAMPLE_PY = `def two_sum(nums, target):
+    seen = {}  # value -> index
+    for i, v in enumerate(nums):
+        need = target - v
+        if need in seen:
+            return [seen[need], i]
+        seen[v] = i
+    return []
+`;
+
 type SideResult = {
   method: MethodIR;
   complexity: ComplexityResult;
 };
+
+type Language = "java" | "python";
 
 const VERDICT_STYLE: Record<ComplexityDelta["time"]["verdict"], string> = {
   improved: "border-success/50 bg-success/10 text-success",
@@ -49,11 +69,11 @@ const VERDICT_LABEL: Record<ComplexityDelta["time"]["verdict"], string> = {
   unclear: "unclear",
 };
 
-async function analyzeSource(source: string): Promise<SideResult[]> {
+async function analyzeSource(source: string, language: Language): Promise<SideResult[]> {
   const res = await fetch("/api/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source }),
+    body: JSON.stringify({ source, language }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Analysis failed.");
@@ -61,6 +81,7 @@ async function analyzeSource(source: string): Promise<SideResult[]> {
 }
 
 export default function DiffPage() {
+  const [language, setLanguage] = useState<Language>("java");
   const [brute, setBrute] = useState(BRUTE_EXAMPLE);
   const [optimized, setOptimized] = useState(OPTIMIZED_EXAMPLE);
   const [bruteResult, setBruteResult] = useState<SideResult | null>(null);
@@ -81,7 +102,7 @@ export default function DiffPage() {
     setLoading(true);
     setError(null);
     try {
-      const [a, b] = await Promise.all([analyzeSource(brute), analyzeSource(optimized)]);
+      const [a, b] = await Promise.all([analyzeSource(brute, language), analyzeSource(optimized, language)]);
       setBruteResult(a[0] ?? null);
       setOptimizedResult(b[0] ?? null);
       if (!a[0] || !b[0]) setError("Both solutions must contain at least one method.");
@@ -92,6 +113,16 @@ export default function DiffPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function switchLanguage(l: Language) {
+    if (language === l) return;
+    setLanguage(l);
+    setBrute(l === "python" ? BRUTE_EXAMPLE_PY : BRUTE_EXAMPLE);
+    setOptimized(l === "python" ? OPTIMIZED_EXAMPLE_PY : OPTIMIZED_EXAMPLE);
+    setBruteResult(null);
+    setOptimizedResult(null);
+    setError(null);
   }
 
   const delta =
@@ -108,13 +139,30 @@ export default function DiffPage() {
             Paste both attempts at the same problem and narrate the complexity improvement — the classic interview moment.
           </p>
         </div>
-        <button
-          onClick={analyzeBoth}
-          disabled={loading}
-          className="rounded bg-primary-container px-4 py-1.5 text-body-sm font-medium text-on-primary-container disabled:opacity-50"
-        >
-          {loading ? "Analyzing…" : "Analyze Both"}
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex overflow-hidden rounded border border-panel-border" role="group" aria-label="Source language">
+            {(["java", "python"] as Language[]).map((l) => (
+              <button
+                key={l}
+                onClick={() => switchLanguage(l)}
+                className={`px-2.5 py-1 font-mono text-code-sm ${
+                  language === l
+                    ? "bg-primary-container text-on-primary-container"
+                    : "text-text-muted hover:bg-surface-container-high hover:text-on-surface"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={analyzeBoth}
+            disabled={loading}
+            className="rounded bg-primary-container px-4 py-1.5 text-body-sm font-medium text-on-primary-container disabled:opacity-50"
+          >
+            {loading ? "Analyzing…" : "Analyze Both"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -132,6 +180,7 @@ export default function DiffPage() {
             <CodeEditor
               value={brute}
               onChange={setBrute}
+              language={language === "python" ? "python" : "java"}
               padding={{ top: 8, bottom: 8 }}
               onMount={(editor) => {
                 bruteEditor.current = editor;
@@ -147,6 +196,7 @@ export default function DiffPage() {
             <CodeEditor
               value={optimized}
               onChange={setOptimized}
+              language={language === "python" ? "python" : "java"}
               padding={{ top: 8, bottom: 8 }}
               onMount={(editor) => {
                 optimizedEditor.current = editor;

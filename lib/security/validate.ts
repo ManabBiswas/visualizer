@@ -11,6 +11,8 @@ export const MAX_TOPIC_TAGS = 10;
 export const MAX_TOPIC_CHARS = 50;
 export const MAX_QUERY_PARAM_CHARS = 50;
 export const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const;
+export const LANGUAGES = ["java", "python"] as const;
+export type Language = (typeof LANGUAGES)[number];
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -44,7 +46,7 @@ export function isSafeHttpUrl(raw: string | null | undefined): boolean {
 
 export function validateSource(raw: unknown): ValidationResult<string> {
   if (typeof raw !== "string" || raw.trim().length === 0) {
-    return { ok: false, error: "Missing `source` (Java code) in request body." };
+    return { ok: false, error: "Missing `source` (code) in request body." };
   }
   if (raw.length > MAX_SOURCE_CHARS) {
     return { ok: false, error: `Source is too large (max ${MAX_SOURCE_CHARS} characters).` };
@@ -53,6 +55,18 @@ export function validateSource(raw: unknown): ValidationResult<string> {
     return { ok: false, error: "Source contains invalid characters." };
   }
   return { ok: true, value: raw };
+}
+
+/**
+ * Validates the optional `language` field. Absent/empty means Java (the
+ * original and default language) — keeps old clients working unchanged.
+ */
+export function validateLanguage(raw: unknown): ValidationResult<Language> {
+  if (raw === undefined || raw === null || raw === "") return { ok: true, value: "java" };
+  if (typeof raw !== "string" || !(LANGUAGES as readonly string[]).includes(raw)) {
+    return { ok: false, error: `\`language\` must be one of: ${LANGUAGES.join(", ")}.` };
+  }
+  return { ok: true, value: raw as Language };
 }
 
 /** Console input for the run feature — optional, bounded, no null bytes. */

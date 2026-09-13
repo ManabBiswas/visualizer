@@ -13,9 +13,11 @@ export type Sample = {
   link: string;
   difficulty: "Easy" | "Medium" | "Hard";
   topicTags: string[];
+  /** Source language — drives the parser engine and editor highlighting. */
+  language?: "java" | "python";
   /** One-line tagline shown on the picker card. */
   blurb: string;
-  /** The Java source. Tagged with // q: / // note: / // why: / // complexity: */
+  /** The source. Java: // q:/note:/why:/complexity: tags. Python: # tags. */
   source: string;
 };
 
@@ -176,6 +178,49 @@ export const SAMPLES: Sample[] = [
         return stack.isEmpty();
     }
 }
+`,
+  },
+  {
+    id: "py-binary-search",
+    name: "Binary Search (Python)",
+    link: "https://leetcode.com/problems/binary-search/",
+    difficulty: "Easy",
+    topicTags: ["Array", "Binary Search"],
+    language: "python",
+    blurb: "Same classic in Python — # tags become flashcards just like // tags.",
+    source: `def search(arr, target):
+    # why: each iteration halves the search range
+    lo, hi = 0, len(arr) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        # note: mid belongs to the current search range
+        if arr[mid] == target:
+            return mid
+        if arr[mid] < target:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return -1
+`,
+  },
+  {
+    id: "py-two-sum",
+    name: "Two Sum (Python)",
+    link: "https://leetcode.com/problems/two-sum/",
+    difficulty: "Easy",
+    topicTags: ["Array", "Hash Table"],
+    language: "python",
+    blurb: "Python dict one-pass. Try the diff tab against the Java version.",
+    source: `def two_sum(nums, target):
+    # complexity: time O(n), space O(n) for the dict
+    seen = {}  # note: value -> index map
+    for i, v in enumerate(nums):
+        need = target - v
+        # q: why do we check the dict before inserting the current value?
+        if need in seen:
+            return [seen[need], i]
+        seen[v] = i
+    return []
 `,
   },
 ];

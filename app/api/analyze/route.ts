@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { ProgramIR } from "@/lib/ir";
-import { parseJava } from "@/lib/parser";
+import { parseSource } from "@/lib/parser";
 import { analyzeComplexity } from "@/lib/complexity/analyze";
 import { analyzeBlockComplexity } from "@/lib/complexity/blocks";
 import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
@@ -9,7 +9,7 @@ import { generateCallGraph } from "@/lib/flowchart/callGraph";
 import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
 import { redactSecrets } from "@/lib/security/env";
-import { validateSource, validateProblemMeta } from "@/lib/security/validate";
+import { validateSource, validateProblemMeta, validateLanguage } from "@/lib/security/validate";
 import { isRateLimited, tryAcquireParserSlot, releaseParserSlot } from "@/lib/security/rateLimit";
 
 const MAX_CONCURRENT_PARSERS = 4;
@@ -29,9 +29,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const { source: rawSource, problem: rawProblem } = (body ?? {}) as {
+  const { source: rawSource, problem: rawProblem, language: rawLanguage } = (body ?? {}) as {
     source?: unknown;
     problem?: unknown;
+    language?: unknown;
   };
 
   const sourceCheck = validateSource(rawSource);
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: metaCheck.error }, { status: 400 });
   }
   const problem = metaCheck.value;
+  const languageCheck = validateLanguage(rawLanguage);
+  if (!languageCheck.ok) {
+    return NextResponse.json({ error: languageCheck.error }, { status: 400 });
+  }
+  const language = languageCheck.value;
 
   if (isRateLimited(clientIp(req), RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json(
@@ -60,10 +66,11 @@ export async function POST(req: NextRequest) {
 
   let ir: ProgramIR;
   try {
-    ir = await parseJava(sourceCheck.value);
+    ir = await parseSource(sourceCheck.value, language);
   } catch (err) {
+    const label = language === "python" ? "Python" : "Java";
     return NextResponse.json(
-      { error: `Failed to parse Java source: ${(err as Error).message}` },
+      { error: `Failed to parse ${label} source: ${(err as Error).message}` },
       { status: 422 },
     );
   } finally {
@@ -139,12 +146,13 @@ export async function POST(req: NextRequest) {
           if (existing) {
             problemId = existing.id;
             db.prepare(
-              `UPDATE problems SET link = ?, topic_tags = ?, difficulty = ?, source_code = ?, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+              `UPDATE problems SET link = ?, topic_tags = ?, difficulty = ?, source_code = ?, language = ?, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
             ).run(
               problem.link,
               JSON.stringify(problem.topicTags),
               problem.difficulty,
               sourceCheck.value,
+              language,
               problemId,
             );
             db.prepare("DELETE FROM analyses WHERE problem_id = ?").run(problemId);
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
           } else {
             problemId = randomUUID();
             db.prepare(
-              `INSERT INTO problems (id, user_id, name, link, topic_tags, difficulty, source_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+              `INSERT INTO problems (id, user_id, name, link, topic_tags, difficulty, source_code, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
             ).run(
               problemId,
               userId,
@@ -166,6 +174,7 @@ export async function POST(req: NextRequest) {
               JSON.stringify(problem.topicTags),
               problem.difficulty,
               sourceCheck.value,
+              language,
             );
           }
 

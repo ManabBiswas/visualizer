@@ -104,16 +104,18 @@ export function buildQuizPrompt(
   analyses: Array<{ method_name: string | null; time_complexity: string | null; space_complexity: string | null }>,
   source: string,
   count: number,
+  language: "java" | "python" = "java",
 ): { system: string; user: string } {
   const safeCount = Math.min(MAX_DRAFT_COUNT, Math.max(MIN_DRAFT_COUNT, Math.floor(count) || 5));
 
+  const truncationComment = language === "python" ? "# …(truncated)" : "// …(truncated)";
   // Line-boundary truncation with a clear marker so the model knows the excerpt ended deliberately.
   let excerpt = source;
   if (excerpt.length > MAX_SOURCE_EXCERPT_CHARS) {
     excerpt = excerpt.slice(0, MAX_SOURCE_EXCERPT_CHARS);
     const lastNewline = excerpt.lastIndexOf("\n");
     if (lastNewline > 0) excerpt = excerpt.slice(0, lastNewline);
-    excerpt += "\n// …(truncated)";
+    excerpt += `\n${truncationComment}`;
   }
 
   const baseFacts = factsFromIr(ir, analyses);
@@ -140,8 +142,9 @@ export function buildQuizPrompt(
     })
     .join("\n");
 
+  const languageLabel = language === "python" ? "Python" : "Java";
   const system = [
-    "You are a spaced-repetition quiz writer for Java DSA interview prep.",
+    `You are a spaced-repetition quiz writer for ${languageLabel} DSA interview prep.`,
     "You draft flashcards about the GIVEN code only. Never invent APIs, lines, or behaviors that are not present.",
     "Prefer 'why' questions (reasoning, invariants, edge cases, complexity trade-offs) over 'what' trivia.",
     "Every question must be answerable from the code or the provided analyzer facts.",
@@ -158,8 +161,8 @@ export function buildQuizPrompt(
     "Deterministic analysis facts (from a static analyzer — treat as ground truth):",
     methodBlocks,
     "",
-    `Java source (line numbers = 1-indexed):`,
-    "```java",
+    `${languageLabel} source (line numbers = 1-indexed):`,
+    "```" + language,
     excerpt,
     "```",
     "",

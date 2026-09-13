@@ -8,8 +8,11 @@ export type ComplexityResult = {
 };
 
 // Known library call costs. Call targets are receiver-qualified by the parser
-// (e.g. "Arrays.sort"), so keys must be qualified the same way.
+// (e.g. "Arrays.sort"), so keys must be qualified the same way. Java and
+// Python stdlib shapes are both listed — each language only ever matches its
+// own entries, so the shared map costs nothing.
 export const CALL_COSTS: Record<string, { bigO: string; note: string }> = {
+  // Java
   "Arrays.sort": { bigO: "n log n", note: "Arrays.sort uses a dual-pivot quicksort/timsort hybrid" },
   "Collections.sort": { bigO: "n log n", note: "Collections.sort is a stable mergesort" },
   "List.sort": { bigO: "n log n", note: "List.sort is a stable mergesort" },
@@ -24,12 +27,33 @@ export const CALL_COSTS: Record<string, { bigO: string; note: string }> = {
   "PriorityQueue.poll": { bigO: "log n", note: "heap extract-min" },
   "StringBuilder.append": { bigO: "1", note: "amortized O(1) append" },
   "String.charAt": { bigO: "1", note: "O(1) index access" },
+  // Python stdlib (bare function or module-qualified forms)
+  sorted: { bigO: "n log n", note: "sorted() is Timsort" },
+  "list.sort": { bigO: "n log n", note: "list.sort is Timsort" },
+  "heapq.heappush": { bigO: "log n", note: "heap insert" },
+  "heapq.heappop": { bigO: "log n", note: "heap extract-min" },
+  "heapq.heappushpop": { bigO: "log n", note: "heap insert + extract" },
+  "heapq.heapify": { bigO: "n", note: "linear-time heapify" },
+  "bisect.bisect_left": { bigO: "log n", note: "binary search" },
+  "bisect.bisect_right": { bigO: "log n", note: "binary search" },
+  "bisect.bisect": { bigO: "log n", note: "binary search" },
+  "dict.get": { bigO: "1", note: "amortized O(1) hash lookup" },
+  "dict.setdefault": { bigO: "1", note: "amortized O(1) hash insert" },
+  "set.add": { bigO: "1", note: "amortized O(1) hash insert" },
+  "list.append": { bigO: "1", note: "amortized O(1) append" },
+  "list.pop": { bigO: "1", note: "O(1) pop from the end" },
+  "collections.deque.append": { bigO: "1", note: "O(1) append" },
+  "collections.deque.popleft": { bigO: "1", note: "O(1) pop from the front" },
 };
 
-const HALVING_ARG = /\/\s*2|>>\s*1|\bsubstring\s*\(/;
+const HALVING_ARG = /\/\s*2|>>\s*1|\bsubstring\s*\(|\s\/\/\s*2/;
 const HALVING_ASSIGNMENT = /=\s*[^;=]*(\/\s*2|>>\s*1)/;
+// Java `new` allocations and Python collection literals/calls both mean
+// "auxiliary structure proportional to input" for space analysis. The
+// Java alternative also covers fully-qualified forms like
+// `new java.util.HashMap<>()`.
 const AUX_ALLOCATION =
-  /new\s+\w+\s*\[|new\s+(ArrayList|LinkedList|HashMap|HashSet|TreeMap|TreeSet|ArrayDeque|PriorityQueue|StringBuilder|StringBuffer)\b/;
+  /new\s+(?:[\w.]+\s*\.\s*)?(?:\w+\s*\[|(ArrayList|LinkedList|HashMap|HashSet|TreeMap|TreeSet|ArrayDeque|PriorityQueue|StringBuilder|StringBuffer|HashMap)\b)|\blist\s*\(|\bdict\s*\(|\bset\s*\(|\bdeque\s*\(|\[\s*\]|\{\s*\}|set\s*\(\s*\)/;
 
 function maxLoopDepth(body: StatementNode[]): { depth: number; worstBound: LoopBoundType; ambiguousLines: number[] } {
   let depth = 0;

@@ -68,7 +68,11 @@ export function classifyLoopBound(
   if (!condition) return "unknown";
   const collapsed = condition.replace(/\s+/g, "");
   if (collapsed === "true") return "input-dependent";
-  if (/\w\.length\b/.test(collapsed) || /\w\.size\(\)/.test(collapsed)) return "input-dependent";
+  // Java collection-size and Python len() probes both mean "bounded by
+  // whatever the caller passed in."
+  if (/\w\.length\b/.test(collapsed) || /\w\.size\(\)/.test(collapsed) || /\blen\(/.test(collapsed)) {
+    return "input-dependent";
+  }
 
   const identifiers = (collapsed.match(/[A-Za-z_]\w*/g) ?? []).filter((id) => !LOOP_KEYWORDS.has(id));
   // A loop variable that is itself a parameter (e.g. `while (n > 1) { n /= 2; }`)

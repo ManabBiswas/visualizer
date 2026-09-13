@@ -4,15 +4,43 @@ import type { Theme } from "@/lib/theme";
 import { analyzeComplexity } from "@/lib/complexity/analyze";
 import type { TooltipMap } from "./tooltips";
 
+// Python stdlib modules whose lowercase receivers are still library calls
+// (e.g. heapq.heappush) — Java's equivalent signal is a capitalized receiver
+// (Arrays.sort). Local receivers like `mylist.append` stay user-code noise.
+const PYTHON_STDLIB_MODULES = new Set([
+  "heapq",
+  "bisect",
+  "collections",
+  "itertools",
+  "functools",
+  "math",
+  "cmath",
+  "random",
+  "re",
+  "string",
+  "array",
+  "queue",
+  "struct",
+  "textwrap",
+  "operator",
+]);
+
+function isLibraryCall(call: string): boolean {
+  if (/^[A-Z]\w*\./.test(call)) return true; // Java: Arrays.sort
+  const receiver = call.includes(".") ? call.split(".")[0] : "";
+  return PYTHON_STDLIB_MODULES.has(receiver); // Python: heapq.heappush
+}
+
 /**
  * Builds a Mermaid call graph for multi-method problems (e.g. a DFS with a
  * separate helper). Returns null for single-method problems — the UI hides
  * the tab entirely in that case rather than showing an empty graph.
  *
- * Internal methods are accent-colored nodes; qualified library/JDK calls
- * (receiver starts with an uppercase name, e.g. Arrays.sort) render as
- * dimmed leaf nodes. Unqualified external calls (println, containsKey on
- * locals, ...) are skipped to avoid noise.
+ * Internal methods are accent-colored nodes; qualified library calls (Java:
+ * receiver starts with an uppercase name, e.g. Arrays.sort; Python: stdlib
+ * module receiver, e.g. heapq.heappush) render as dimmed leaf nodes.
+ * Unqualified external calls (println, containsKey on locals, ...) are
+ * skipped to avoid noise.
  *
  * Each internal method node carries a complexity badge (e.g. "O(log n)")
  * inside its label and a richer hover tooltip (signature + time/space) in
@@ -78,7 +106,7 @@ export function generateCallGraph(
 
       if (defined.has(simpleName)) {
         toId = defined.get(simpleName)!.id;
-      } else if (/^[A-Z]\w*\./.test(call)) {
+      } else if (isLibraryCall(call)) {
         if (!externals.has(call)) {
           const extId = `x${externals.size + 1}`;
           externals.set(call, extId);

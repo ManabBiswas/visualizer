@@ -2,14 +2,16 @@ import { CommentTag, MethodIR } from "@/lib/ir";
 
 // Matches tagged comments at the start of a line OR trailing after code
 // (e.g. `int mid = lo + (hi - lo) / 2; // why: avoid overflow`).
-// The `[^:]` guard avoids matching URLs like `https://...`.
-const TAG_PATTERN = /(?:^|[^:])\/\/\s*(q|note|why|complexity)\s*:\s*(.+?)\s*$/i;
+// Accepts both Java `//` and Python `#` comment forms; the `[^#:/]` guard
+// avoids matching URLs like `https://...` or Python `#!` shebangs.
+const TAG_PATTERN = /(?:^|[^:#/])(?:\/\/|#)\s*(q|note|why|complexity)\s*:\s*(.+?)\s*$/i;
 
 /**
- * Scans raw source lines for tagged comments (// q:, // note:, // why:, // complexity:),
- * both as standalone comment lines and as trailing comments after code, and returns them
- * as CommentTag entries. Runs on raw source rather than only the AST so comments the
- * parser doesn't attribute cleanly are still caught.
+ * Scans raw source lines for tagged comments (// q:, // note:, // why:,
+ * // complexity: — or the # equivalents in Python), both as standalone
+ * comment lines and as trailing comments after code, and returns them as
+ * CommentTag entries. Runs on raw source rather than only the AST so
+ * comments the parser doesn't attribute cleanly are still caught.
  */
 export function extractCommentTags(sourceLines: string[]): CommentTag[] {
   const tags: CommentTag[] = [];

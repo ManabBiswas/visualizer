@@ -26,6 +26,8 @@ const MonacoReactEditor = dynamic(() => import("@monaco-editor/react").then((m) 
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  /** Monaco language label — one base worker serves all labels. */
+  language?: string;
   onMount?: (editor: CodeEditorHandle) => void;
   onCursorChange?: (line: number) => void;
   padding?: { top?: number; bottom?: number };
@@ -34,6 +36,7 @@ type Props = {
 export function CodeEditor({
   value,
   onChange,
+  language = "java",
   onMount,
   onCursorChange,
   padding = { top: 12, bottom: 12 },
@@ -107,7 +110,7 @@ export function CodeEditor({
 
   return (
     <MonacoReactEditor
-      language="java"
+      language={language}
       theme={theme === "dark" ? "vs-dark" : "vs"}
       value={value}
       onChange={(v) => onChange(v ?? "")}

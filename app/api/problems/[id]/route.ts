@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       const problem = db
         .prepare("SELECT * FROM problems WHERE id = ? AND user_id = ?")
         .get(id, userId) as
-        | { id: string; name: string; link: string | null; topic_tags: string; difficulty: string | null; source_code: string; created_at: string }
+        | { id: string; name: string; link: string | null; topic_tags: string; difficulty: string | null; source_code: string; language: string | null; created_at: string }
         | undefined;
       if (!problem) {
         return NextResponse.json({ error: "Problem not found." }, { status: 404 });
@@ -57,6 +57,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
           topicTags,
           difficulty: problem.difficulty,
           sourceCode: problem.source_code,
+          language: problem.language === "python" ? "python" : "java",
           createdAt: problem.created_at,
         },
         analysis,
