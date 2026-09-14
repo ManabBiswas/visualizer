@@ -123,7 +123,7 @@ export default async function SharedProblemPage({ params }: Props) {
           .prepare(
             `SELECT n.tag_type, n.text, n.line_number
              FROM notes n JOIN problems p ON p.id = n.problem_id
-             WHERE p.share_slug = ?
+             WHERE p.share_slug = ? AND n.source IS NULL
              ORDER BY n.line_number`
           )
           .all(slug),

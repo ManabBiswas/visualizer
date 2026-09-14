@@ -20,30 +20,37 @@ export default async function OgImage({ slug }: { slug: string }) {
   let row: SlugRow;
   let methods: Array<{ method_name: string | null; time_complexity: string | null }> = [];
   let dbFailed = false;
-  try {
-    // withDb: heal a stale Turso stream so public OG previews don't silently
-    // degrade on evictions (this path has no other heal opportunity).
-    const loaded = withDb((db) => {
-      const r = db
-        .prepare("SELECT name, difficulty FROM problems WHERE share_slug = ?")
-        .get(slug) as SlugRow;
-      const m = r
-        ? (db
-            .prepare(
-              `SELECT a.method_name, a.time_complexity
-               FROM analyses a JOIN problems p ON p.id = a.problem_id
-               WHERE p.share_slug = ?
-               ORDER BY a.created_at DESC`,
-            )
-            .all(slug) as typeof methods)
-        : [];
-      return { r, m };
-    });
-    row = loaded.r;
-    methods = loaded.m;
-  } catch {
-    dbFailed = true;
+  // Shape-validate the slug exactly like the page does — an invalid shape
+  // can never match a stored slug, so go straight to the neutral card
+  // without touching the DB.
+  if (!isValidShareSlug(slug)) {
     row = undefined;
+  } else {
+    try {
+      // withDb: heal a stale Turso stream so public OG previews don't silently
+      // degrade on evictions (this path has no other heal opportunity).
+      const loaded = withDb((db) => {
+        const r = db
+          .prepare("SELECT name, difficulty FROM problems WHERE share_slug = ?")
+          .get(slug) as SlugRow;
+        const m = r
+          ? (db
+              .prepare(
+                `SELECT a.method_name, a.time_complexity
+                 FROM analyses a JOIN problems p ON p.id = a.problem_id
+                 WHERE p.share_slug = ?
+                 ORDER BY a.created_at DESC`,
+              )
+              .all(slug) as typeof methods)
+          : [];
+        return { r, m };
+      });
+      row = loaded.r;
+      methods = loaded.m;
+    } catch {
+      dbFailed = true;
+      row = undefined;
+    }
   }
 
   // Unknown/revoked slug or DB failure: still render a valid image (social
