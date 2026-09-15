@@ -12,6 +12,7 @@ import { WalkthroughPanel } from "@/components/WalkthroughPanel";
 import { RunConsole } from "@/components/RunConsole";
 import { ComplexityPanel } from "@/components/ComplexityPanel";
 import { NoteCard } from "@/components/NoteBadge";
+import { NoteMaker } from "@/components/NoteMaker";
 import { SamplePicker } from "@/components/SamplePicker";
 import { AiQuizDrawer } from "@/components/AiQuizDrawer";
 import { AnalysisSkeleton } from "@/components/Skeleton";
@@ -466,6 +467,13 @@ function EditorPage() {
                 {tab === "complexity" && <ComplexityPanel result={current?.complexity ?? null} />}
                 {tab === "notes" && (
                   <div className="flex h-full flex-col gap-2 overflow-auto p-panel-padding">
+                    {savedProblemId && (
+                      <NoteMaker
+                        problemId={savedProblemId}
+                        problemName={meta.name || "this problem"}
+                        onNoteAdded={() => void analyze()}
+                      />
+                    )}
                     {savedProblemId && current && current.method.comments.some((c) => c.tag === "q") && (
                       <Link
                         href={`/quiz?problem=${savedProblemId}`}
