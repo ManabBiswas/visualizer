@@ -9,6 +9,8 @@ import { stripControlChars } from "@/lib/security/validate";
 
 export const MAX_QUESTION_CHARS = 300;
 export const MAX_ANSWER_CHARS = 1000;
+export const MAX_EXPLANATION_CHARS = 500;
+export const MCQ_CHOICES_COUNT = 4;
 /** Hard cap on accepted drafts per run (mirrors the drawer's slider max). */
 export const MAX_DRAFT_CARDS = 10;
 
@@ -16,6 +18,10 @@ export type DraftCard = {
   question: string;
   answer: string;
   line: number | null;
+  // MCQ fields (optional, for multiple-choice format)
+  choices?: string[];
+  correct_index?: number;
+  explanation?: string;
 };
 
 /** Removes ```json / ``` fences and trims. */
@@ -44,14 +50,35 @@ function sanitizeLine(raw: unknown): number | null {
 
 function sanitizeCard(raw: unknown): DraftCard | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const c = raw as { question?: unknown; answer?: unknown; line?: unknown };
+  const c = raw as { question?: unknown; answer?: unknown; line?: unknown; choices?: unknown; correct_index?: unknown; explanation?: unknown };
   if (typeof c.question !== "string" || typeof c.answer !== "string") return null;
 
   const question = stripControlChars(c.question).trim().slice(0, MAX_QUESTION_CHARS);
   const answer = stripControlChars(c.answer).trim().slice(0, MAX_ANSWER_CHARS);
   if (!question || !answer) return null;
 
-  return { question, answer, line: sanitizeLine(c.line) };
+  // MCQ fields
+  let choices: string[] | undefined;
+  let correct_index: number | undefined;
+  let explanation: string | undefined;
+
+  if (Array.isArray(c.choices) && c.choices.length === MCQ_CHOICES_COUNT) {
+    const cleanChoices = c.choices
+      .map((choice) => (typeof choice === "string" ? stripControlChars(choice).trim().slice(0, MAX_ANSWER_CHARS) : ""))
+      .filter((c) => c.length > 0);
+    if (cleanChoices.length === MCQ_CHOICES_COUNT) {
+      choices = cleanChoices;
+    }
+  }
+  if (typeof c.correct_index === "number" && Number.isInteger(c.correct_index) && c.correct_index >= 0 && c.correct_index < MCQ_CHOICES_COUNT) {
+    correct_index = c.correct_index;
+  }
+  if (typeof c.explanation === "string") {
+    const clean = stripControlChars(c.explanation).trim().slice(0, MAX_EXPLANATION_CHARS);
+    if (clean) explanation = clean;
+  }
+
+  return { question, answer, line: sanitizeLine(c.line), choices, correct_index, explanation };
 }
 
 /**

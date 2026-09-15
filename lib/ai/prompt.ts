@@ -32,6 +32,9 @@ export type PromptFacts = {
 /** Wire shape of a built prompt — consumed by the provider registry. */
 export type PromptMessages = { system: string; user: string };
 
+/** Output format for quiz cards — "open" (traditional) or "mcq" (multiple choice). */
+export type QuizFormat = "open" | "mcq";
+
 /** Cap for the source excerpt — keeps prompts (and provider cost) bounded. */
 export const MAX_SOURCE_EXCERPT_CHARS = 15_000;
 /** Hard cap on requested cards — mirrors the drawer's slider maximum. */
@@ -105,6 +108,7 @@ export function buildQuizPrompt(
   source: string,
   count: number,
   language: "java" | "python" = "java",
+  format: QuizFormat = "open",
 ): { system: string; user: string } {
   const safeCount = Math.min(MAX_DRAFT_COUNT, Math.max(MIN_DRAFT_COUNT, Math.floor(count) || 5));
 
@@ -143,14 +147,24 @@ export function buildQuizPrompt(
     .join("\n");
 
   const languageLabel = language === "python" ? "Python" : "Java";
+  const isMcq = format === "mcq";
+  const mcqInstructions = isMcq
+    ? [
+        "Output format: multiple-choice questions (MCQ). Return ONLY a JSON array — no prose, no markdown fences.",
+        'Shape: [{"question": string (max 300 chars), "choices": string[] (exactly 4), "correct_index": number (0-3), "explanation": string (max 500 chars), "line": number|null}]',
+        "Each MCQ must have exactly 4 choices. Only one is correct. The explanation should justify the correct answer.",
+        "Choices should be plausible but only one is correct based on the code and analyzer facts.",
+      ].join("\n")
+    : 'Shape: [{"question": string (max 300 chars), "answer": string (max 1000 chars), "line": number|null}]';
+
   const system = [
     `You are a spaced-repetition quiz writer for ${languageLabel} DSA interview prep.`,
     "You draft flashcards about the GIVEN code only. Never invent APIs, lines, or behaviors that are not present.",
     "Prefer 'why' questions (reasoning, invariants, edge cases, complexity trade-offs) over 'what' trivia.",
     "Every question must be answerable from the code or the provided analyzer facts.",
     "Reference specific lines or methods when it helps, but do not rely on line numbers being visible to the learner.",
-    "Return ONLY a JSON array — no prose, no markdown fences. Shape:",
-    '[{"question": string (max 300 chars), "answer": string (max 1000 chars), "line": number|null}]',
+    "Return ONLY a JSON array — no prose, no markdown fences.",
+    mcqInstructions,
   ].join("\n");
 
   const user = [

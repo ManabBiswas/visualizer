@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const { problemId, provider, apiKey, count, baseUrl, model } = (body ?? {}) as Record<string, unknown>;
+  const { problemId, provider, apiKey, count, baseUrl, model, format } = (body ?? {}) as Record<string, unknown>;
 
   if (typeof problemId !== "string" || !isValidId(problemId)) {
     return NextResponse.json({ error: "Invalid `problemId`." }, { status: 400 });
@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
     typeof count === "number" && Number.isInteger(count)
       ? Math.min(MAX_DRAFT_COUNT, Math.max(MIN_DRAFT_COUNT, count))
       : 5;
+  const quizFormat = format === "mcq" ? "mcq" : "open";
 
   // Owner-scoped load of the problem + its latest analysis batch (the IR
   // rides inside analyses.ir_json; a foreign problem is indistinguishable
@@ -176,6 +177,7 @@ export async function POST(req: NextRequest) {
     problem.source_code,
     cardCount,
     problem.language === "python" ? "python" : "java",
+    quizFormat,
   );
   const request = buildRequest(provider, effectiveKey, prompt, custom);
 

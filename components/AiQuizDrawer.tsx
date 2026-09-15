@@ -10,7 +10,13 @@ type DraftCard = {
   question: string;
   answer: string;
   line: number | null;
+  // MCQ fields (optional)
+  choices?: string[];
+  correct_index?: number;
+  explanation?: string;
 };
+
+type QuizFormat = "open" | "mcq";
 
 const LS_KEY = "codelens.ai.providerKey";
 
@@ -53,6 +59,7 @@ export function AiQuizDrawer({
   const [baseUrl, setBaseUrl] = useState(restored?.baseUrl ?? "");
   const [model, setModel] = useState(restored?.model ?? "");
   const [count, setCount] = useState(5);
+  const [format, setFormat] = useState<QuizFormat>("open");
   const [drafts, setDrafts] = useState<DraftCard[] | null>(null);
   const [acceptedIdx, setAcceptedIdx] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -72,6 +79,7 @@ export function AiQuizDrawer({
           provider,
           apiKey: apiKey.trim() === "" ? undefined : apiKey.trim(),
           count,
+          format,
           ...(provider === "custom" ? { baseUrl: baseUrl.trim(), model: model.trim() } : {}),
         }),
       });
@@ -190,6 +198,17 @@ export function AiQuizDrawer({
             </>
           )}
           <label className="flex flex-col gap-1">
+            <span className="label-caps">Format</span>
+            <select
+              value={format}
+              onChange={(e) => setFormat(e.target.value as QuizFormat)}
+              className="rounded border border-panel-border bg-surface-container px-2 py-1 text-body-sm text-on-surface"
+            >
+              <option value="open">Open-ended (question + answer)</option>
+              <option value="mcq">Multiple Choice (4 options)</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
             <span className="label-caps">API key {provider === "custom" && <span className="text-text-muted">(optional)</span>}</span>
             <input
               type="password"
@@ -289,6 +308,7 @@ export function AiQuizDrawer({
           </div>
           {drafts.map((card, i) => {
             const done = acceptedIdx.has(i);
+            const isMcq = format === "mcq";
             return (
               <div
                 key={i}
@@ -315,14 +335,60 @@ export function AiQuizDrawer({
                   disabled={done}
                   className="resize-y rounded bg-surface-container-lowest px-2 py-1 text-body-sm text-on-surface outline-none focus-visible:ring-1 focus-visible:ring-primary"
                 />
-                <textarea
-                  value={card.answer}
-                  onChange={(e) => updateDraft(i, { answer: e.target.value })}
-                  rows={3}
-                  placeholder="Answer"
-                  disabled={done}
-                  className="resize-y rounded bg-surface-container-lowest px-2 py-1 text-body-sm text-on-surface outline-none focus-visible:ring-1 focus-visible:ring-primary"
-                />
+                {isMcq && card.choices ? (
+                  <>
+                    {card.choices.map((choice, ci) => (
+                      <label
+                        key={ci}
+                        className={`flex items-center gap-2 rounded border p-2 ${
+                          card.correct_index === ci
+                            ? "border-primary/50 bg-primary/10"
+                            : "border-panel-border bg-surface-container-lowest"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`mcq-${i}`}
+                          checked={card.correct_index === ci}
+                          onChange={() => updateDraft(i, { correct_index: ci })}
+                          disabled={done}
+                          className="accent-primary"
+                        />
+                        <textarea
+                          value={choice}
+                          onChange={(e) => {
+                            const newChoices = [...card.choices!];
+                            newChoices[ci] = e.target.value;
+                            updateDraft(i, { choices: newChoices });
+                          }}
+                          rows={1}
+                          placeholder={`Choice ${ci + 1}`}
+                          disabled={done}
+                          className="flex-1 resize-none bg-transparent text-body-sm text-on-surface outline-none"
+                        />
+                      </label>
+                    ))}
+                  </>
+                ) : (
+                  <textarea
+                    value={card.answer}
+                    onChange={(e) => updateDraft(i, { answer: e.target.value })}
+                    rows={3}
+                    placeholder="Answer"
+                    disabled={done}
+                    className="resize-y rounded bg-surface-container-lowest px-2 py-1 text-body-sm text-on-surface outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                  />
+                )}
+                {isMcq && card.explanation && (
+                  <textarea
+                    value={card.explanation}
+                    onChange={(e) => updateDraft(i, { explanation: e.target.value })}
+                    rows={2}
+                    placeholder="Explanation (why this answer is correct)"
+                    disabled={done}
+                    className="resize-y rounded bg-surface-container-lowest px-2 py-1 text-body-sm text-on-surface outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                  />
+                )}
                 <div className="flex items-center gap-2 text-code-sm text-text-muted">
                   <span>source line</span>
                   <input

@@ -14,10 +14,26 @@ import { isRateLimited } from "@/lib/security/rateLimit";
 const MAX_CARDS_PER_REQUEST = 10;
 const MAX_QUESTION_CHARS = 300;
 const MAX_ANSWER_CHARS = 1000;
+const MAX_EXPLANATION_CHARS = 500;
+const MCQ_CHOICES_COUNT = 4;
 
-type IncomingCard = { question?: unknown; answer?: unknown; line?: unknown };
+type IncomingCard = {
+  question?: unknown;
+  answer?: unknown;
+  line?: unknown;
+  choices?: unknown;
+  correct_index?: unknown;
+  explanation?: unknown;
+};
 
-function sanitizeCard(raw: IncomingCard): { question: string; answer: string; line: number | null } | null {
+function sanitizeCard(raw: IncomingCard): {
+  question: string;
+  answer: string;
+  line: number | null;
+  choices: string[] | null;
+  correct_index: number | null;
+  explanation: string | null;
+} | null {
   if (typeof raw.question !== "string" || typeof raw.answer !== "string") return null;
   const question = stripControlChars(raw.question).trim().slice(0, MAX_QUESTION_CHARS);
   const answer = stripControlChars(raw.answer).trim().slice(0, MAX_ANSWER_CHARS);
@@ -26,7 +42,31 @@ function sanitizeCard(raw: IncomingCard): { question: string; answer: string; li
     typeof raw.line === "number" && Number.isInteger(raw.line) && raw.line >= 1 && raw.line <= 100_000
       ? raw.line
       : null;
-  return { question, answer, line };
+
+  // MCQ fields
+  let choices: string[] | null = null;
+  let correct_index: number | null = null;
+  let explanation: string | null = null;
+
+  if (Array.isArray(raw.choices) && raw.choices.length === MCQ_CHOICES_COUNT) {
+    const cleanChoices = raw.choices
+      .map((choice) => (typeof choice === "string" ? stripControlChars(choice).trim().slice(0, MAX_ANSWER_CHARS) : ""))
+      .filter((c) => c.length > 0);
+    if (cleanChoices.length === MCQ_CHOICES_COUNT) {
+      choices = cleanChoices;
+    }
+  }
+  // Only accept correct_index if choices is also valid (complete MCQ)
+  if (choices && typeof raw.correct_index === "number" && Number.isInteger(raw.correct_index) && raw.correct_index >= 0 && raw.correct_index < MCQ_CHOICES_COUNT) {
+    correct_index = raw.correct_index;
+  }
+  // Only accept explanation if choices is also valid (complete MCQ)
+  if (choices && typeof raw.explanation === "string") {
+    const clean = stripControlChars(raw.explanation).trim().slice(0, MAX_EXPLANATION_CHARS);
+    if (clean) explanation = clean;
+  }
+
+  return { question, answer, line, choices, correct_index, explanation };
 }
 
 export async function POST(req: NextRequest) {
@@ -92,13 +132,13 @@ export async function POST(req: NextRequest) {
         );
 
         const insert = db.prepare(
-          "INSERT INTO notes (id, problem_id, tag_type, text, answer, line_number, source) VALUES (?, ?, 'q', ?, ?, ?, 'ai')",
+          `INSERT INTO notes (id, problem_id, tag_type, text, answer, line_number, choices, correct_index, explanation, source) VALUES (?, ?, 'q', ?, ?, ?, ?, ?, ?, 'ai')`,
         );
         const acceptedIds: string[] = [];
         for (const card of clean) {
           if (existing.has(card.question)) continue;
           const id = randomUUID();
-          insert.run(id, problemId, card.question, card.answer, card.line);
+          insert.run(id, problemId, card.question, card.answer, card.line, card.choices ? JSON.stringify(card.choices) : null, card.correct_index, card.explanation);
           acceptedIds.push(id);
         }
         db.exec("COMMIT");

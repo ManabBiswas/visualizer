@@ -171,6 +171,16 @@ export function migrate(db: Database.Database): void {
   if (!noteColumns.some((c) => c.name === "source")) {
     db.exec("ALTER TABLE notes ADD COLUMN source TEXT");
   }
+  // v0.6: MCQ support — choices array + correct index + explanation
+  if (!noteColumns.some((c) => c.name === "choices")) {
+    db.exec("ALTER TABLE notes ADD COLUMN choices TEXT");
+  }
+  if (!noteColumns.some((c) => c.name === "correct_index")) {
+    db.exec("ALTER TABLE notes ADD COLUMN correct_index INTEGER");
+  }
+  if (!noteColumns.some((c) => c.name === "explanation")) {
+    db.exec("ALTER TABLE notes ADD COLUMN explanation TEXT");
+  }
   // card_states.lapse_count: how many times the card was graded "again" —
   // cards at >= MISTAKE_THRESHOLD form the mistake journal.
   const cardColumns = db.prepare("PRAGMA table_info(card_states)").all() as { name: string }[];
