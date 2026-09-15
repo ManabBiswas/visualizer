@@ -229,11 +229,16 @@ export function buildRequest(
       };
     case "gemini":
       // Gemini has no system role in v1beta generateContent — systemPrompt
-      // rides as a systemInstruction; the key travels as a query param
-      // because that's the documented auth mode for this endpoint.
+      // rides as a systemInstruction. The key travels in the
+      // x-goog-api-key HEADER (also a documented auth mode) so it never
+      // lands in URLs — URL-logging proxies/access logs would otherwise
+      // capture it (audit Rev 5 follow-up).
       return {
-        url: `${spec.url}?key=${encodeURIComponent(apiKey)}`,
-        headers: { "Content-Type": "application/json" },
+        url: spec.url,
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: messages.system }] },
           contents: [{ role: "user", parts: [{ text: messages.user }] }],

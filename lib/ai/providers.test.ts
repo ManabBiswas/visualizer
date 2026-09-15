@@ -69,10 +69,14 @@ describe("buildRequest", () => {
     expect(body.temperature).toBeLessThan(1);
   });
 
-  it("gemini: key as query param (documented auth mode), systemInstruction", () => {
+  it("gemini: key in the x-goog-api-key header (never a URL query), systemInstruction", () => {
     const req = buildRequest("gemini", KEY, messages);
     expect(req.url.startsWith("https://generativelanguage.googleapis.com/v1beta/models/")).toBe(true);
-    expect(req.url).toContain(`key=${encodeURIComponent(KEY)}`);
+    // The key must never ride in the URL — URL-logging proxies/access logs
+    // would capture it (audit Rev 5 follow-up).
+    expect(req.url).not.toContain("key=");
+    expect(req.url).not.toContain(KEY);
+    expect(req.headers["x-goog-api-key"]).toBe(KEY);
     expect(req.headers.Authorization).toBeUndefined();
     const body = JSON.parse(req.body);
     expect(body.systemInstruction.parts[0].text).toBe("SYS");
@@ -97,8 +101,11 @@ describe("buildRequest", () => {
       const req = buildRequest(id, KEY, hostile);
       expect(req.url.startsWith(PROVIDERS[id].url)).toBe(true);
       const extra = req.url.slice(PROVIDERS[id].url.length);
-      // Only the gemini ?key= suffix is ever appended.
-      if (extra.length > 0) expect(extra.startsWith("?key=")).toBe(true);
+      // No provider appends anything to its pinned URL anymore (the Gemini
+      // key moved from ?key= to a header).
+      expect(extra).toBe("");
+      // And no key ever appears in a URL, for any provider.
+      expect(req.url).not.toContain(KEY);
     }
   });
 });

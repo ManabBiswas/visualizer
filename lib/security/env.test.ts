@@ -53,6 +53,39 @@ describe("redactSecrets", () => {
   });
 });
 
+describe("redactSecrets — BYO provider key shapes", () => {
+  const CASES: Array<[string, string]> = [
+    ["openai", "sk-proj-abcdefghijklmnopqrstuv"],
+    ["anthropic", "sk-ant-api03-abcdefghijklmnopqrst"],
+    ["groq", "gsk_abcdEfghIjklMnopQrstuVwxyz"],
+    ["gemini/google", "AIzaSyA1234567890abcdefghijklmnopqrstuvw"],
+    ["together", "glhf-abcdefghijklmnopqrstuv"],
+    ["replicate", "r8_abcdefghijklmnopqrstuv"],
+  ];
+
+  it.each(CASES)("redacts %s keys even when no env var holds them", (_label, key) => {
+    setSecret("AUTH_SECRET", undefined); // no env secrets in play
+    const msg = `fetch failed after retry, key was ${key} in the request`;
+    const out = redactSecrets(msg);
+    expect(out).not.toContain(key);
+    expect(out).toContain("[redacted api key]");
+  });
+
+  it("redacts multiple keys in one message", () => {
+    const msg = "mixed sk-proj-abcdefghijklmnopqrstuv and AIzaSyA1234567890abcdefghijklmnopqrstuvw here";
+    const out = redactSecrets(msg);
+    expect(out).not.toContain("sk-proj-");
+    expect(out).not.toContain("AIzaSy");
+    expect(out.match(/\[redacted api key\]/g)).toHaveLength(2);
+  });
+
+  it("leaves non-key text that merely resembles a prefix alone", () => {
+    // short strings below the shape thresholds must not be mangled
+    expect(redactSecrets("sk-short here")).toBe("sk-short here");
+    expect(redactSecrets("gsk_abc here")).toBe("gsk_abc here");
+  });
+});
+
 describe("SECRET_ENV_KEYS", () => {
   it("covers every secret the app handles", () => {
     expect(SECRET_ENV_KEYS).toContain("AUTH_SECRET");

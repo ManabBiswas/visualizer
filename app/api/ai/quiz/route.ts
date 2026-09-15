@@ -23,12 +23,6 @@ const RATE_LIMIT_PER_MINUTE = 5;
 const FETCH_TIMEOUT_MS_PINNED = 30_000;
 const FETCH_TIMEOUT_MS_CUSTOM = 300_000;
 
-function clientIp(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim() || "unknown";
-  return req.headers.get("x-real-ip") ?? "local";
-}
-
 /**
  * Coalesces an OpenAI-style message content that may be a plain string OR
  * an array of typed parts — see lib/ai/extract.ts (unit-tested there for
@@ -51,7 +45,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sign in to draft quiz cards with AI." }, { status: 401 });
   }
 
-  if (isRateLimited(`ai:${clientIp(req)}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
+  // Keyed on the SESSION user, not the client IP — this route is
+  // auth-required anyway, and X-Forwarded-For is client-controlled behind
+  // Vercel's proxy, so an IP key could be rotated to bypass the limit.
+  if (isRateLimited(`ai:${userId}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json(
       { error: "Too many AI drafting requests — try again in a minute." },
       { status: 429 },
