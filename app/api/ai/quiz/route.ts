@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
-import { isValidId } from "@/lib/security/validate";
+import { isValidId, parseJsonArray } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
 import { isRateLimited } from "@/lib/security/rateLimit";
 import { buildQuizPrompt, MIN_DRAFT_COUNT, MAX_DRAFT_COUNT } from "@/lib/ai/prompt";
@@ -151,12 +151,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: redactSecrets((err as Error).message) }, { status: 503 });
   }
 
-  let topicTags: string[] = [];
-  try {
-    topicTags = JSON.parse(problem.topic_tags || "[]");
-  } catch {
-    topicTags = [];
-  }
+  const topicTags = parseJsonArray(problem.topic_tags);
 
   // Re-hydrate the latest IR for grounded facts; fall back to an empty IR
   // (the prompt still carries the source + complexity columns).

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { withDb } from "@/lib/db/init";
 import { isValidShareSlug } from "@/lib/share/slug";
+import { parseJsonArray } from "@/lib/security/validate";
 import { SharedProblemView, type MethodSummary, type SharedProblem } from "./view";
 
 
@@ -35,12 +36,7 @@ async function loadShared(slug: string): Promise<SharedProblem | null> {
     return null;
   }
   if (!row) return null;
-  let topicTags: string[] = [];
-  try {
-    topicTags = JSON.parse(row.topic_tags || "[]");
-  } catch {
-    topicTags = [];
-  }
+  const topicTags = parseJsonArray(row.topic_tags);
   return {
     name: row.name,
     link: row.link,

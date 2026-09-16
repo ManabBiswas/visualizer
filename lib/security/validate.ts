@@ -170,3 +170,24 @@ export function cleanQueryParam(raw: string | null): string | null {
   const clean = stripControlChars(raw).trim().slice(0, MAX_QUERY_PARAM_CHARS);
   return clean || null;
 }
+
+/** Safely parses a JSON string array, returning empty array on failure. */
+export function parseJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Safely parses a JSON value with a fallback. */
+export function parseJson<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}

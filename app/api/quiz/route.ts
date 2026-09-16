@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
-import { cleanQueryParam, isValidId } from "@/lib/security/validate";
+import { cleanQueryParam, isValidId, parseJsonArray } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
 import { isRateLimited } from "@/lib/security/rateLimit";
 import { pickFocusSession } from "@/lib/spaced/focus";
@@ -72,12 +72,7 @@ export async function GET(req: NextRequest) {
 
   const now = Date.now();
   let cards = rows.map((r) => {
-    let topics: string[] = [];
-    try {
-      topics = JSON.parse(r.topic_tags || "[]");
-    } catch {
-      topics = [];
-    }
+    const topics = parseJsonArray(r.topic_tags);
     return {
       id: r.id,
       problemId: r.problem_id,

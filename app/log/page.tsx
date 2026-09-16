@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { TOPICS } from "@/lib/topics";
 import { logToMarkdown, logToCsv, LogExportRow } from "@/lib/export/log";
 import { downloadText } from "@/lib/export/download";
-import { isSafeHttpUrl } from "@/lib/security/validate";
+import { isSafeHttpUrl, parseJsonArray } from "@/lib/security/validate";
 import { SignInPrompt } from "@/components/SignInPrompt";
 import { toast } from "@/components/Toast";
 
@@ -30,13 +30,7 @@ const DIFFICULTY_COLOR: Record<string, string> = {
   Hard: "text-error",
 };
 
-function parseTopics(raw: string | null): string[] {
-  try {
-    return JSON.parse(raw || "[]");
-  } catch {
-    return [];
-  }
-}
+const parseTopics = parseJsonArray;
 
 // created_at rows may be legacy "YYYY-MM-DD HH:MM:SS" (UTC, space separator)
 // or ISO "YYYY-MM-DDTHH:MM:SS.sssZ" from the unified format. Parse both as

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
-import { cleanQueryParam } from "@/lib/security/validate";
+import { cleanQueryParam, parseJsonArray } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
 import { isRateLimited } from "@/lib/security/rateLimit";
 
@@ -65,13 +65,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (topic) {
-    rows = rows.filter((r) => {
-      try {
-        return (JSON.parse(r.topic_tags || "[]") as string[]).includes(topic);
-      } catch {
-        return false;
-      }
-    });
+    rows = rows.filter((r) => parseJsonArray(r.topic_tags).includes(topic));
   }
   if (difficulty) rows = rows.filter((r) => r.difficulty === difficulty);
 

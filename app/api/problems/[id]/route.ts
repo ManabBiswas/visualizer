@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withDb } from "@/lib/db/init";
 import { getAuthedUserId } from "@/lib/api/user";
-import { isValidId } from "@/lib/security/validate";
+import { isValidId, parseJsonArray } from "@/lib/security/validate";
 import { redactSecrets } from "@/lib/security/env";
 import { isRateLimited } from "@/lib/security/rateLimit";
 
@@ -42,12 +42,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         .prepare("SELECT tag_type, text, line_number FROM notes WHERE problem_id = ? ORDER BY line_number")
         .all(id);
 
-      let topicTags: string[] = [];
-      try {
-        topicTags = JSON.parse(problem.topic_tags || "[]");
-      } catch {
-        topicTags = [];
-      }
+      const topicTags = parseJsonArray(problem.topic_tags);
 
       return NextResponse.json({
         problem: {
