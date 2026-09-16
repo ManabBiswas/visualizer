@@ -10,8 +10,8 @@ import { callRoute, createTestDb, useTestDb, sessionCookies } from "./harness";
 const TIMEOUT = 30000;
 const LIMIT = 5; // matches RATE_LIMIT_PER_MINUTE in the route
 
-let aliceCookies: { "authjs.session-token": string };
-let bobCookies: { "authjs.session-token": string };
+let aliceCookies: { "next-auth.session-token": string };
+let bobCookies: { "next-auth.session-token": string };
 
 beforeAll(async () => {
   await useTestDb(await createTestDb());

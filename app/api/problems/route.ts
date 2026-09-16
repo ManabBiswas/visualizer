@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   }
   // Per-user limit: the synchronous libsql client makes unbounded authed
   // flooding an event-loop DoS — cheap insurance on every owner-scoped route.
-  if (isRateLimited(`problems:${userId}`, 60, 60_000)) {
+  if (await isRateLimited(`problems:${userId}`, 60, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 

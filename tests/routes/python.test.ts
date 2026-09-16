@@ -19,7 +19,7 @@ const PY_SOURCE = `def two_sum(nums, target):
     return []
 `;
 
-let cookies: { "authjs.session-token": string };
+let cookies: { "next-auth.session-token": string };
 let problemId: string;
 
 beforeAll(async () => {

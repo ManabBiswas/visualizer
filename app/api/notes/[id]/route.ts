@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!userId) {
     return NextResponse.json({ error: "Sign in to edit answers." }, { status: 401 });
   }
-  if (isRateLimited(`notes:${userId}`, 90, 60_000)) {
+  if (await isRateLimited(`notes:${userId}`, 90, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
   const { id } = await ctx.params;

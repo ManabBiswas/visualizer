@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   // Keyed on the SESSION user, not the client IP — this route is
   // auth-required anyway, and X-Forwarded-For is client-controlled behind
   // Vercel's proxy, so an IP key could be rotated to bypass the limit.
-  if (isRateLimited(`ai:${userId}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
+  if (await isRateLimited(`ai:${userId}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json(
       { error: "Too many AI drafting requests — try again in a minute." },
       { status: 429 },

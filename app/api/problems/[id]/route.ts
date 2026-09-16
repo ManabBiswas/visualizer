@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (!userId) {
     return NextResponse.json({ error: "Sign in to view problems." }, { status: 401 });
   }
-  if (isRateLimited(`problem:${userId}`, 90, 60_000)) {
+  if (await isRateLimited(`problem:${userId}`, 90, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
   const { id } = await ctx.params;

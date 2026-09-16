@@ -10,7 +10,7 @@ export async function GET() {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to see your progress." }, { status: 401 });
   }
-  if (isRateLimited(`progress:${userId}`, 30, 60_000)) {
+  if (await isRateLimited(`progress:${userId}`, 30, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 

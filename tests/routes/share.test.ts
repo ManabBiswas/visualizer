@@ -23,7 +23,7 @@ const SAMPLE_SOURCE = `public class Main {
 const AI_CARD_QUESTION = "AI-DRAFTED SECRET: why does the loop terminate?";
 const AI_CARD_ANSWER = "Because i reaches a.length.";
 
-let cookies: { "authjs.session-token": string };
+let cookies: { "next-auth.session-token": string };
 let problemId: string;
 let slug: string;
 

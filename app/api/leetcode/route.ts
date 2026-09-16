@@ -17,7 +17,7 @@ function clientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   const key = `leetcode:${clientIp(req)}`;
-  if (isRateLimited(key, RATE_LIMIT_PER_MINUTE, 60_000)) {
+  if (await isRateLimited(key, RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json({ error: "Too many import requests. Try again in a minute." }, { status: 429 });
   }
 

@@ -4,6 +4,14 @@ import { assertRequiredEnv } from "@/lib/security/env";
 
 assertRequiredEnv();
 
+const AUTH_TRUST_HOST = process.env.AUTH_TRUST_HOST
+  ? process.env.AUTH_TRUST_HOST === "true"
+  : process.env.NODE_ENV === "production"
+    ? false
+    : true;
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 // Narrow what the provider actually sends; the bundled Profile type keeps
 // most fields as `unknown` so they cannot be trusted directly.
 function asGitHubProfile(profile: unknown): GitHubProfile | null {
@@ -20,8 +28,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [GitHub],
   session: { strategy: "jwt" },
   // Auth.js v5 only auto-trusts *.vercel.app; localhost and custom domains
-  // need this or every /api/auth/* call 500s with UntrustedHost.
-  trustHost: true,
+  // need explicit trustHost or every /api/auth/* call 500s with UntrustedHost.
+  // In production, set AUTH_TRUST_HOST to your domain (e.g., "yourdomain.com").
+  // Defaults to "localhost" in dev, false in production (Vercel auto-trusts *.vercel.app).
+  trustHost: AUTH_TRUST_HOST,
+  // Secure cookie settings
+  cookies: {
+    sessionToken: {
+      name: IS_PRODUCTION ? "__session" : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/",
+      },
+    },
+    callbackUrl: {
+      name: IS_PRODUCTION ? "__callback" : "next-auth.callback-url",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/",
+      },
+    },
+    csrfToken: {
+      name: IS_PRODUCTION ? "__csrf" : "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/",
+      },
+    },
+  },
   callbacks: {
     // Persist profile fields the JWT needs for user upserts and the nav avatar.
     jwt({ token, profile }) {

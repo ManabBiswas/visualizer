@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   }
   const language = languageCheck.value;
 
-  if (isRateLimited(clientIp(req), RATE_LIMIT_PER_MINUTE, 60_000)) {
+  if (await isRateLimited(clientIp(req), RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json(
       { error: "Too many analysis requests — please slow down." },
       { status: 429 },

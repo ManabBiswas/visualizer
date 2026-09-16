@@ -6,7 +6,7 @@ import { callRoute, createTestDb, useTestDb, sessionCookies, currentTestDb } fro
 
 const TIMEOUT = 30000;
 
-let cookies: { "authjs.session-token": string };
+let cookies: { "next-auth.session-token": string };
 let problemId: string;
 
 beforeAll(async () => {

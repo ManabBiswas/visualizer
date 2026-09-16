@@ -19,7 +19,7 @@ const SAMPLE_SOURCE = `public class Main {
 
 const PROBLEM_META = { name: "Matrix Test Problem", topicTags: ["Arrays"], difficulty: "Easy" };
 
-type Users = { aliceCookies: { "authjs.session-token": string }; bobCookies: { "authjs.session-token": string } };
+type Users = { aliceCookies: { "next-auth.session-token": string }; bobCookies: { "next-auth.session-token": string } };
 
 let users: Users;
 let aliceProblemId: string;

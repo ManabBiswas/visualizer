@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to view your quiz cards." }, { status: 401 });
   }
-  if (isRateLimited(`quiz:${userId}`, 60, 60_000)) {
+  if (await isRateLimited(`quiz:${userId}`, 60, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 

@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: stdinCheck.error }, { status: 400 });
   }
 
-  if (isRateLimited(`run:${clientIp(req)}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
+  if (await isRateLimited(`run:${clientIp(req)}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json(
       { error: "Too many run requests — please slow down." },
       { status: 429 },

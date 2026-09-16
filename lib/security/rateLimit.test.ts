@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  isRateLimited,
+  isRateLimitedSync,
   tryAcquireParserSlot,
   releaseParserSlot,
   activeParserCount,
@@ -11,25 +11,25 @@ beforeEach(() => {
   resetSecurityState();
 });
 
-describe("isRateLimited", () => {
+describe("isRateLimitedSync", () => {
   it("allows calls under the limit and blocks after", () => {
     const now = 1_000_000;
     for (let i = 0; i < 5; i++) {
-      expect(isRateLimited("ip1", 5, 60_000, now + i)).toBe(false);
+      expect(isRateLimitedSync("ip1", 5, 60_000, now + i)).toBe(false);
     }
-    expect(isRateLimited("ip1", 5, 60_000, now + 10)).toBe(true);
+    expect(isRateLimitedSync("ip1", 5, 60_000, now + 10)).toBe(true);
   });
 
   it("tracks keys independently", () => {
     const now = 1_000_000;
-    for (let i = 0; i < 5; i++) isRateLimited("ip1", 5, 60_000, now);
-    expect(isRateLimited("ip2", 5, 60_000, now)).toBe(false);
+    for (let i = 0; i < 5; i++) isRateLimitedSync("ip1", 5, 60_000, now);
+    expect(isRateLimitedSync("ip2", 5, 60_000, now)).toBe(false);
   });
 
   it("frees budget after the window expires", () => {
     const now = 1_000_000;
-    for (let i = 0; i < 5; i++) isRateLimited("ip1", 5, 60_000, now);
-    expect(isRateLimited("ip1", 5, 60_000, now + 61_000)).toBe(false);
+    for (let i = 0; i < 5; i++) isRateLimitedSync("ip1", 5, 60_000, now);
+    expect(isRateLimitedSync("ip1", 5, 60_000, now + 61_000)).toBe(false);
   });
 });
 

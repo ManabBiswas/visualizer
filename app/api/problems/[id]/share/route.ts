@@ -29,7 +29,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!isValidId(id)) {
     return NextResponse.json({ error: "Invalid problem id." }, { status: 400 });
   }
-  if (isRateLimited(`share:${userId}`, 30, 60_000)) {
+  if (await isRateLimited(`share:${userId}`, 30, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 
@@ -75,7 +75,7 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   if (!isValidId(id)) {
     return NextResponse.json({ error: "Invalid problem id." }, { status: 400 });
   }
-  if (isRateLimited(`share:${userId}`, 30, 60_000)) {
+  if (await isRateLimited(`share:${userId}`, 30, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 

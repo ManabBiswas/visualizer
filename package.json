@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
+    "@types/ioredis": "^4.28.10",
+    "ioredis": "^6.0.0",
     "java-parser": "^3.0.1",
     "jspdf": "^4.2.1",
     "libsql": "^0.5.29",

@@ -83,7 +83,7 @@ export function currentTestDb(): Database.Database {
 }
 
 // ---------------------------------------------------------------------------
-// Session minting: `authjs.session-token` is the cookie name Auth.js derives
+// Session minting: `next-auth.session-token` is the cookie name Auth.js derives
 // the encryption key from for the non-secure dev cookie — exactly what the
 // routes see over http in tests. Returns the RAW token value; callRoute's
 // `cookies` map adds the `name=value` framing.
@@ -104,15 +104,15 @@ export async function mintSessionToken(user: {
       avatarUrl: user.avatarUrl ?? undefined,
     },
     secret: TEST_AUTH_SECRET,
-    salt: "authjs.session-token",
+    salt: "next-auth.session-token",
   });
 }
 
 /** Cookie map (name → raw token) for a test user, for callRoute's `cookies`. */
 export async function sessionCookies(user: { githubId: string; login: string }): Promise<{
-  "authjs.session-token": string;
+  "next-auth.session-token": string;
 }> {
-  return { "authjs.session-token": await mintSessionToken(user) };
+  return { "next-auth.session-token": await mintSessionToken(user) };
 }
 
 // ---------------------------------------------------------------------------

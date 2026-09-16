@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to review your quiz cards." }, { status: 401 });
   }
-  if (isRateLimited(`review:${userId}`, 120, 60_000)) {
+  if (await isRateLimited(`review:${userId}`, 120, 60_000)) {
     return NextResponse.json({ error: "Too many reviews — please slow down." }, { status: 429 });
   }
 

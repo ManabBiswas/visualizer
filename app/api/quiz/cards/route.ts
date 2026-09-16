@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to add quiz cards." }, { status: 401 });
   }
-  if (isRateLimited(`quizcards:${userId}`, 30, 60_000)) {
+  if (await isRateLimited(`quizcards:${userId}`, 30, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 

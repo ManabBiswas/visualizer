@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Sign in to add notes." }, { status: 401 });
   }
-  if (isRateLimited(`notes:${userId}`, 90, 60_000)) {
+  if (await isRateLimited(`notes:${userId}`, 90, 60_000)) {
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
   }
 
