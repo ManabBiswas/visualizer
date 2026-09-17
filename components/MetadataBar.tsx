@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { TOPICS } from "@/lib/topics";
 import { toast } from "@/components/Toast";
+import { Button } from "./Button";
 
 export type ProblemMeta = {
   name: string;
@@ -93,13 +94,15 @@ export function MetadataBar({ meta, onChange }: { meta: ProblemMeta; onChange: (
                 className="w-72 rounded border border-panel-border bg-surface-container px-2 py-1 text-on-surface outline-none placeholder:text-text-muted focus:border-primary"
               />
             </label>
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={importState === "loading"}
-              className="rounded border border-panel-border px-3 py-1 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
+              loading={importState === "loading"}
             >
-              {importState === "loading" ? "Importing…" : "Import"}
-            </button>
+              Import
+            </Button>
             {/* Failures are reported via toast — no duplicate inline hint. */}
           </form>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "./Button";
 
 export function BackToTop() {
   const [visible, setVisible] = useState(false);
@@ -18,21 +19,18 @@ export function BackToTop() {
   }, []);
 
   return (
-    <button
+    <Button
       ref={btnRef}
+      variant="outline"
+      size="sm"
       onClick={() => scrollerRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
-      className={
-        visible
-          ? "fixed bottom-6 right-6 z-50 flex items-center gap-1.5 rounded-full border border-panel-border bg-surface-container-high px-3.5 py-2 text-body-sm font-medium text-on-surface shadow-lg cursor-pointer hover:bg-surface-container-highest hover:text-primary"
-          : "hidden"
-      }
+      className={`fixed bottom-6 right-6 z-50 ${visible ? "block" : "hidden"}`}
       title="Back to top"
       aria-label="Scroll back to top"
       aria-hidden={!visible}
-      tabIndex={visible ? 0 : -1}
     >
       <span className="animate-pulse" aria-hidden="true">↑</span>
-      
-    </button>
+      <span className="hidden sm:inline">Back to top</span>
+    </Button>
   );
 }

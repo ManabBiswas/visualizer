@@ -16,6 +16,7 @@ import { NoteMaker } from "@/components/NoteMaker";
 import { SamplePicker } from "@/components/SamplePicker";
 import { AiQuizDrawer } from "@/components/AiQuizDrawer";
 import { AnalysisSkeleton } from "@/components/Skeleton";
+import { Button } from "@/components/Button";
 import { SAMPLES, findSample, type Sample } from "@/data/samples";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
@@ -284,8 +285,10 @@ function EditorPage() {
               </span>
               <div className="ml-2 flex overflow-hidden rounded border border-panel-border" role="group" aria-label="Source language">
                 {(["java", "python"] as Language[]).map((l) => (
-                  <button
+                  <Button
                     key={l}
+                    variant={language === l ? "primary" : "outline"}
+                    size="sm"
                     onClick={() => {
                       if (language === l) return;
                       setLanguage(l);
@@ -298,58 +301,51 @@ function EditorPage() {
                       setSaveWarning(null);
                       setError(null);
                     }}
-                    className={`px-2.5 py-0.5 font-mono text-code-sm ${
-                      language === l
-                        ? "bg-primary-container text-on-primary-container"
-                        : "text-text-muted hover:bg-surface-container-high hover:text-on-surface"
-                    }`}
                     title={l === "python" ? "Switch to Python analysis" : "Switch to Java analysis"}
                   >
                     {l}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant={sampleOpen ? "primary" : "outline"}
+                size="sm"
                 onClick={() => setSampleOpen((o) => !o)}
-                className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
-                  sampleOpen
-                    ? "border-primary text-primary"
-                    : "border-panel-border text-on-surface-variant hover:text-on-surface"
-                }`}
                 title="Curated samples with rich tagged comments — one click to analyze"
               >
                 {sampleOpen ? "Samples ▾" : "Try a sample ▸"}
-              </button>
+              </Button>
               {RUN_ENABLED && language === "java" && (
-                <button
+                <Button
+                  variant={consoleOpen ? "primary" : "outline"}
+                  size="sm"
                   onClick={() => setConsoleOpen((o) => !o)}
-                  className={`rounded border px-3 py-1.5 text-body-sm font-medium ${
-                    consoleOpen
-                      ? "border-primary text-primary"
-                      : "border-panel-border text-on-surface-variant hover:text-on-surface"
-                  }`}
                   title="Toggle the run console (execute your code with stdin input)"
                 >
                   {consoleOpen ? "Console ▾" : "Console ▸"}
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={downloadReport}
                 disabled={!current || reporting}
-                className="rounded border border-panel-border px-3 py-1.5 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
                 title="Download a light-theme PDF report: code, complexity, blocks, notes and flowchart"
+                loading={reporting}
               >
-                {reporting ? "Building…" : "PDF Report"}
-              </button>
-              <button
+                PDF Report
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => void analyze()}
                 disabled={loading}
-                className="rounded bg-primary-container px-4 py-1.5 text-body-sm font-semibold text-on-primary-container hover:opacity-90 disabled:opacity-50"
+                loading={loading}
               >
-                {loading ? "Analyzing…" : "Analyze"}
-              </button>
+                Analyze
+              </Button>
             </div>
           </div>
           {sampleOpen && (
@@ -373,12 +369,13 @@ function EditorPage() {
             <div className="flex shrink-0 items-center gap-3 border-t border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-on-surface-variant">
               <span className="min-w-0 flex-1">{saveWarning}</span>
               {saveWarning.includes("Sign in") && (
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => signIn("github", { callbackUrl: "/analyze" })}
-                  className="shrink-0 rounded bg-primary-container px-3 py-1 text-body-sm font-medium text-on-primary-container hover:opacity-90"
                 >
                   Sign in with GitHub
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -395,17 +392,14 @@ function EditorPage() {
             <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
               <span className="label-caps shrink-0">Methods</span>
               {results.map((r, i) => (
-                <button
+                <Button
                   key={i}
+                  variant={i === activeMethod ? "primary" : "outline"}
+                  size="sm"
                   onClick={() => setActiveMethod(i)}
-                  className={`whitespace-nowrap rounded px-2 py-0.5 font-mono text-code-sm ${
-                    i === activeMethod
-                      ? "bg-primary-container text-on-primary-container"
-                      : "text-text-muted hover:bg-surface-container-high hover:text-on-surface"
-                  }`}
                 >
                   {r.method.name}()
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -414,24 +408,34 @@ function EditorPage() {
             {((callGraph
               ? ["flowchart", "blocks", "callgraph", "complexity", "notes"]
               : ["flowchart", "blocks", "complexity", "notes"]) as RightTab[]).map((t) => (
-              <button
+              <Button
                 key={t}
+                variant={tab === t ? "primary" : "ghost"}
+                size="sm"
                 onClick={() => setTab(t)}
-                className={`border-b-2 px-4 py-2 text-body-sm font-medium ${
-                  tab === t
-                    ? "border-primary bg-surface-container text-primary"
-                    : "border-transparent text-text-muted hover:text-on-surface"
-                }`}
+                className="h-auto py-2 px-4"
               >
                 {TAB_LABELS[t]}
-              </button>
+              </Button>
             ))}
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden">
             {loading ? (
               <AnalysisSkeleton
-                variant={tab === "flowchart" || tab === "callgraph" ? "diagram" : tab === "blocks" ? "table" : "list"}
+                variant={
+                tab === "flowchart"
+                  ? "diagram"
+                  : tab === "callgraph"
+                  ? "callgraph"
+                  : tab === "blocks"
+                  ? "table"
+                  : tab === "complexity"
+                  ? "complexity"
+                  : tab === "notes"
+                  ? "notes"
+                  : "list"
+              }
               />
             ) : (
               <>
@@ -484,20 +488,17 @@ function EditorPage() {
                 )}
                 {savedProblemId && (
                   <div className="flex flex-col gap-2">
-                    <button
+                    <Button
+                      variant={aiOpen ? "primary" : "outline"}
+                      size="sm"
                       onClick={() => {
                         setAiOpen((o) => !o);
                         setAiNotice(null);
                       }}
-                      className={`self-start rounded border px-3 py-1 text-body-sm font-medium ${
-                        aiOpen
-                          ? "border-primary text-primary"
-                          : "border-panel-border text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                      }`}
                       title="Optional: draft quiz cards with your own AI provider key — drafts are reviewed before they enter the deck"
                     >
                       {aiOpen ? "Close AI drafting" : "Draft quiz cards with AI…"}
-                    </button>
+                    </Button>
                     {aiOpen && (
                       <AiQuizDrawer
                         problemId={savedProblemId}

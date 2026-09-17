@@ -4,6 +4,7 @@ import "./globals.css";
 import { TopNav } from "@/components/TopNav";
 import { Providers } from "@/components/Providers";
 import { ToastViewport } from "@/components/Toast";
+import { ScreenSizeWarning } from "@/components/ScreenSizeWarning";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono" });
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
           </div>
           <ToastViewport />
+          <ScreenSizeWarning />
         </Providers>
       </body>
     </html>
