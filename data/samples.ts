@@ -14,10 +14,10 @@ export type Sample = {
   difficulty: "Easy" | "Medium" | "Hard";
   topicTags: string[];
   /** Source language — drives the parser engine and editor highlighting. */
-  language?: "java" | "python";
+  language?: "java" | "python" | "cpp";
   /** One-line tagline shown on the picker card. */
   blurb: string;
-  /** The source. Java: // q:/note:/why:/complexity: tags. Python: # tags. */
+  /** The source. Java: // q:/note:/why:/complexity: tags. Python: # tags. C++: // tags. */
   source: string;
 };
 
@@ -28,6 +28,7 @@ export const SAMPLES: Sample[] = [
     link: "https://leetcode.com/problems/binary-search/",
     difficulty: "Easy",
     topicTags: ["Array", "Binary Search"],
+    language: "java",
     blurb: "Classic log n lookup. The // q: comment becomes a flashcard.",
     source: `class Solution {
     // why: each iteration halves the search range
@@ -52,6 +53,7 @@ export const SAMPLES: Sample[] = [
     link: "https://leetcode.com/problems/two-sum/",
     difficulty: "Easy",
     topicTags: ["Array", "Hash Table"],
+    language: "java",
     blurb: "O(n) with a hash map. Try the Run console with a custom input.",
     source: `class Solution {
     // complexity: time O(n), space O(n) for the map
@@ -77,6 +79,7 @@ export const SAMPLES: Sample[] = [
     link: "https://leetcode.com/problems/sort-an-array/",
     difficulty: "Medium",
     topicTags: ["Array", "Divide and Conquer", "Sorting"],
+    language: "java",
     blurb: "Recursive with a call graph. The recurrence shows in the blocks tab.",
     source: `class Solution {
     // complexity: time O(n log n), space O(n) for the buffer
@@ -115,6 +118,7 @@ export const SAMPLES: Sample[] = [
     link: "https://leetcode.com/problems/number-of-islands/",
     difficulty: "Medium",
     topicTags: ["Array", "BFS", "Graph", "Matrix"],
+    language: "java",
     blurb: "BFS over a grid. Tests the call graph and the Run console together.",
     source: `class Solution {
     // complexity: time O(m*n), space O(m*n) worst-case for the queue
@@ -158,6 +162,7 @@ export const SAMPLES: Sample[] = [
     link: "https://leetcode.com/problems/valid-parentheses/",
     difficulty: "Easy",
     topicTags: ["Stack", "String"],
+    language: "java",
     blurb: "Stack-based. Switch statement shows up in the flowchart as a decision.",
     source: `class Solution {
     // complexity: time O(n), space O(n) for the stack
@@ -203,7 +208,7 @@ export const SAMPLES: Sample[] = [
     return -1
 `,
   },
-  {
+{
     id: "py-two-sum",
     name: "Two Sum (Python)",
     link: "https://leetcode.com/problems/two-sum/",
@@ -220,8 +225,145 @@ export const SAMPLES: Sample[] = [
         if need in seen:
             return [seen[need], i]
         seen[v] = i
-    return []
-`,
+    return []`,
+  },
+  {
+    id: "cpp-hello",
+    name: "Hello C++",
+    link: "https://en.cppreference.com/w/cpp/language/hello_world",
+    difficulty: "Easy",
+    topicTags: ["Basics"],
+    language: "cpp",
+    blurb: "Simple C++ program — introduces the // q: comment style for flashcards.",
+    source: `// complexity: time O(1), space O(1) for the output
+#include <iostream>
+
+int main() {
+    // why: print a greeting to the console
+    std::cout << "Hello, World!" << std::endl;
+    // q: why use std::endl instead of "\n"?
+    return 0;
+}`,
+  },
+  {
+    id: "cpp-binary-search",
+    name: "Binary Search (C++)",
+    link: "https://leetcode.com/problems/binary-search/",
+    difficulty: "Easy",
+    topicTags: ["Array", "Binary Search"],
+    language: "cpp",
+    blurb: "Classic log n lookup. The // q: comment becomes a flashcard.",
+    source: `// why: each iteration halves the search range
+// complexity: time O(log n), space O(1)
+#include <vector>
+using namespace std;
+
+int search(vector<int>& arr, int target) {
+    int low = 0, high = arr.size() - 1;
+    // q: why use low + (high - low) / 2 instead of (low + high) / 2?
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        // note: mid belongs to the current search range
+        if (arr[mid] == target) return mid;
+        if (arr[mid] < target) low = mid + 1;
+        else high = mid - 1;
+    }
+    return -1;
+}`,
+  },
+  {
+    id: "cpp-two-sum",
+    name: "Two Sum (C++)",
+    link: "https://leetcode.com/problems/two-sum/",
+    difficulty: "Easy",
+    topicTags: ["Array", "Hash Table"],
+    language: "cpp",
+    blurb: "O(n) with unordered_map. Try the Run console with custom input.",
+    source: `// complexity: time O(n), space O(n) for the map
+// q: why do we check the map before inserting the current value?
+#include <vector>
+#include <unordered_map>
+using namespace std;
+
+vector<int> twoSum(vector<int>& nums, int target) {
+    unordered_map<int, int> seen;
+    for (int i = 0; i < nums.size(); i++) {
+        int complement = target - nums[i];
+        if (seen.count(complement)) {
+            return { seen[complement], i };
+        }
+        seen[nums[i]] = i;
+    }
+    return {};
+}`,
+  },
+  {
+    id: "cpp-merge-sort",
+    name: "Merge Sort (C++)",
+    link: "https://leetcode.com/problems/sort-an-array/",
+    difficulty: "Medium",
+    topicTags: ["Array", "Divide and Conquer", "Sorting"],
+    language: "cpp",
+    blurb: "Recursive with a call graph. The recurrence shows in the blocks tab.",
+    source: `// complexity: time O(n log n), space O(n) for the buffer
+// why: base case first so a single element is already "sorted"
+#include <vector>
+using namespace std;
+
+vector<int> mergeSort(vector<int>& arr, int lo, int hi) {
+    if (lo >= hi) return { arr[lo] };
+    int mid = lo + (hi - lo) / 2;
+    vector<int> left = mergeSort(arr, lo, mid);
+    vector<int> right = mergeSort(arr, mid + 1, hi);
+    // note: merge copies into a buffer so we don't overwrite inputs mid-pass
+    return merge(left, right);
+}
+
+vector<int> merge(vector<int>& a, vector<int>& b) {
+    vector<int> out(a.size() + b.size());
+    int i = 0, j = 0, k = 0;
+    while (i < a.size() && j < b.size()) {
+        if (a[i] <= b[j]) out[k++] = a[i++];
+        else out[k++] = b[j++];
+    }
+    while (i < a.size()) out[k++] = a[i++];
+    while (j < b.size()) out[k++] = b[j++];
+    return out;
+}
+vector<int> sortArray(vector<int>& nums) {
+    if (nums.size() <= 1) return nums;
+    return mergeSort(nums, 0, nums.size() - 1);
+}`,
+  },
+  {
+    id: "cpp-valid-parentheses",
+    name: "Valid Parentheses (C++)",
+    link: "https://leetcode.com/problems/valid-parentheses/",
+    difficulty: "Easy",
+    topicTags: ["Stack", "String"],
+    language: "cpp",
+    blurb: "Stack-based. Switch statement shows up in the flowchart as a decision.",
+    source: `// complexity: time O(n), space O(n) for the stack
+// why: stack of opening brackets — every closing must match the top
+#include <string>
+#include <stack>
+using namespace std;
+
+bool isValid(string s) {
+    stack<char> st;
+    for (char ch : s) {
+        switch (ch) {
+            case '(': st.push(')'); break;
+            case '[': st.push(']'); break;
+            case '{': st.push('}'); break;
+            // q: why do we both check empty and peek?
+            default:
+                if (st.empty() || st.top() != ch) return false;
+                st.pop();
+        }
+    }
+    return st.empty();
+}`,
   },
 ];
 

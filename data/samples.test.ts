@@ -6,26 +6,29 @@ import { describe, expect, it } from "vitest";
 import { SAMPLES, findSample } from "./samples";
 import { parseJavaTs } from "@/lib/parser/javaTs";
 import { parsePython } from "@/lib/parser/python";
+import { parseCpp } from "@/lib/parser/cpp";
 import { analyzeComplexity } from "@/lib/complexity/analyze";
 import { extractCommentTags, attachTagsToMethods } from "@/lib/notes/extract";
 
 describe("SAMPLES", () => {
   // Language-aware dispatch — same choice /api/analyze makes.
-  const methodsOf = async (source: string, language?: string) =>
-    (language === "python" ? await parsePython(source) : parseJavaTs(source)).classes.flatMap(
-      (c) => c.methods,
-    );
+  const methodsOf = async (source: string, language?: string) => {
+    if (language === "python") return (await parsePython(source)).classes.flatMap((c) => c.methods);
+    if (language === "cpp") return (await parseCpp(source)).classes.flatMap((c) => c.methods);
+    return (await parseJavaTs(source)).classes.flatMap((c) => c.methods);
+  };
 
-  it("has seven samples with unique ids and metadata", () => {
-    expect(SAMPLES).toHaveLength(7);
+  it("has twelve samples with unique ids and metadata", () => {
+    expect(SAMPLES).toHaveLength(12);
     const ids = new Set(SAMPLES.map((s) => s.id));
     expect(ids.size).toBe(SAMPLES.length);
     for (const s of SAMPLES) {
       expect(s.name).toBeTruthy();
-      expect(s.link.startsWith("https://leetcode.com/")).toBe(true);
+      expect(s.link.startsWith("https://")).toBe(true);
       expect(["Easy", "Medium", "Hard"]).toContain(s.difficulty);
       expect(s.topicTags.length).toBeGreaterThan(0);
       expect(s.blurb).toBeTruthy();
+      expect(["java", "python", "cpp"]).toContain(s.language);
     }
   });
 
@@ -79,15 +82,26 @@ describe("SAMPLES", () => {
     // Multi-method call graphs in merge sort + islands.
     expect((await byId("merge-sort")).length).toBeGreaterThanOrEqual(3);
     expect((await byId("bfs-graph")).length).toBeGreaterThanOrEqual(2);
+    // C++ merge sort also has multi-method call graph.
+    expect((await byId("cpp-merge-sort")).length).toBeGreaterThanOrEqual(3);
     // Single-method samples stay single.
     expect(await byId("binary-search")).toHaveLength(1);
     expect(await byId("two-sum")).toHaveLength(1);
     expect(await byId("valid-parentheses")).toHaveLength(1);
+    expect(await byId("cpp-binary-search")).toHaveLength(1);
+    expect(await byId("cpp-two-sum")).toHaveLength(1);
+    expect(await byId("cpp-valid-parentheses")).toHaveLength(1);
     // Recursion detected in merge sort (self-call edge in the call list).
     expect((await byId("merge-sort")).some((m) => m.calls.includes(m.name))).toBe(true);
+    expect((await byId("cpp-merge-sort")).some((m) => m.calls.includes(m.name))).toBe(true);
     // Switch statement visible in valid-parentheses (flowchart decision).
     expect(
       (await byId("valid-parentheses")).some((m) =>
+        JSON.stringify(m.body).includes('"switch"')
+      )
+    ).toBe(true);
+    expect(
+      (await byId("cpp-valid-parentheses")).some((m) =>
         JSON.stringify(m.body).includes('"switch"')
       )
     ).toBe(true);
@@ -100,9 +114,22 @@ describe("SAMPLES", () => {
     expect(analyzeComplexity(ts[0]).time.bigO).toBe("O(n)");
     expect(analyzeComplexity(ts[0]).space.bigO).toBe("O(n)");
   });
+
+  it("C++ samples hit the C++ pipeline with correct verdicts", async () => {
+    const bs = await byIdOfCpp("cpp-binary-search");
+    expect(analyzeComplexity(bs[0]).time.bigO).toBe("O(log n)");
+    const ts = await byIdOfCpp("cpp-two-sum");
+    expect(analyzeComplexity(ts[0]).time.bigO).toBe("O(n)");
+    expect(analyzeComplexity(ts[0]).space.bigO).toBe("O(n)");
+  });
 });
 
 async function byIdOf(id: string) {
   const s = SAMPLES.find((x) => x.id === id)!;
   return (await parsePython(s.source)).classes.flatMap((c) => c.methods);
+}
+
+async function byIdOfCpp(id: string) {
+  const s = SAMPLES.find((x) => x.id === id)!;
+  return (await parseCpp(s.source)).classes.flatMap((c) => c.methods);
 }

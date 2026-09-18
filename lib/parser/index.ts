@@ -8,6 +8,7 @@ import { ProgramIR } from "@/lib/ir";
 import { parseJavaTs } from "./javaTs";
 import { runJavaParser } from "./javaRunner";
 import { parsePython } from "./python";
+import { parseCpp } from "./cpp";
 import type { Language } from "@/lib/security/validate";
 
 export type ParserEngine = "ts" | "java";
@@ -26,7 +27,8 @@ export async function parseJava(source: string): Promise<ProgramIR> {
 /** Language-aware entry point used by the analyze pipeline. */
 export async function parseSource(source: string, language: Language): Promise<ProgramIR> {
   if (language === "python") return parsePython(source);
+  if (language === "cpp") return parseCpp(source);
   return parseJava(source);
 }
 
-export { parsePython };
+export { parsePython, parseCpp };

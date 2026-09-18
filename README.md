@@ -1,18 +1,18 @@
 # CodeLens
 
-CodeLens is a Java DSA analysis and revision tool for interview preparation. Paste a Java solution, inspect its structure as a color-coded flowchart, get complexity estimates with plain-English reasoning, extract revision notes from your own comments, and build a searchable log of solved problems — privately, under your own account.
+CodeLens is a DSA analysis and revision tool for interview preparation. Paste a Java, Python, or C++ solution, inspect its structure as a color-coded flowchart, get complexity estimates with plain-English reasoning, extract revision notes from your own comments, and build a searchable log of solved problems — privately, under your own account.
 
 ## What it does
 
-- Analyzes Java source code with an in-process TypeScript parser (java-parser); JVM CLI kept as an opt-in cross-check
-- **Try a sample**: five curated problems (binary search, two sum, merge sort, BFS islands, valid parentheses) with rich tagged comments — one click loads and analyzes, deep-linkable via `/analyze?sample=two-sum`
+- Analyzes Java, Python, and C++ source code with in-process TypeScript parsers (java-parser for Java, web-tree-sitter WASM for Python, enhanced normalization for C++); JVM CLI kept as an opt-in cross-check for Java
+- **Try a sample**: nine curated problems (binary search, two sum, merge sort, BFS islands, valid parentheses in Java and Python, plus C++ equivalents) with rich tagged comments — one click loads and analyzes, deep-linkable via `/analyze?sample=two-sum`
 - **LeetCode URL import**: paste a `leetcode.com/problems/…` link and the metadata bar auto-fills the name, difficulty and topic tags (unofficial GraphQL, host-allowlisted SSRF guard, graceful fallback to manual entry)
 - **Multi-user with GitHub sign-in** (Auth.js v5): each account gets a private problem log, quiz deck, and notes — enforced at every API route, not just hidden in the UI
 - Saves problems to **Turso** (libSQL) in the cloud, or a local SQLite file in dev — same schema, same code path
 - Renders **multi-color flowcharts** — loops, decisions, calls, recursion, and returns each get their own color, with actual code (conditions, statements, call args) in the node labels and a built-in color legend. Diagrams open in a **pan/zoom viewer**: drag to pan, scroll or pinch to zoom, Fit/100% buttons, native size by default — plus hover tooltips with full node text, hover glow, and a bidirectional cursor↔flowchart highlight (move the editor caret and the matching node pulses)
 - **Blocks walkthrough**: the method as readable per-section block cards — one card per statement with type badges, loop-bound hints, recursion flags, nested indentation, and jump-to-line — for understanding the structure without reading the graph
 - Shows your **tagged comments inside the flowchart** as note nodes attached to the code they annotate (`// q:`, `// note:`, `// why:`, `// complexity:` — standalone or trailing after code)
-- **Run console**: execute your code with real console input — type stdin (what your `Scanner` / `BufferedReader` reads), hit Run (or Ctrl+Enter), and see stdout/stderr, exit code and timing. Compiles and runs in an isolated temp directory with hard timeouts, output caps, JVM heap limits, rate limiting and a concurrency guard. **Local-only feature** — gated behind `NEXT_PUBLIC_ENABLE_RUN=1` because serverless hosts have no JVM; the endpoint itself returns 501 on deployments built without the flag
+- **Run console**: execute your code with real console input — type stdin (what your `Scanner` / `BufferedReader` reads for Java, `cin` for C++), hit Run (or Ctrl+Enter), and see stdout/stderr, exit code and timing. Compiles and runs in an isolated temp directory with hard timeouts, output caps, JVM heap limits (Java) or memory limits (C++), rate limiting and a concurrency guard. **Local-only feature** — gated behind `NEXT_PUBLIC_ENABLE_RUN=1` because serverless hosts have no JVM/C++ compiler; the endpoint itself returns 501 on deployments built without the flag
 - Estimates time/space complexity with confidence scores and reasoning — detects nested loops, linear/halving/branching recursion (log n, n log n, 2^n), iterative binary search, sorting calls, and auxiliary allocations
 - **Self-check mode**: guess both time **and** space complexity before revealing the estimates, with per-dimension right/wrong scoring
 - **Call graph** for multi-method problems (e.g. DFS with a helper): internal methods and library calls as a navigable graph with per-node complexity badges (`O(n log n)` etc.) and signature/complexity tooltips — click a method to jump to its flowchart
@@ -32,8 +32,8 @@ CodeLens is a Java DSA analysis and revision tool for interview preparation. Pas
 ## Stack
 
 - Next.js 16 + TypeScript + React 19
-- Monaco editor for Java input
-- java-parser (TypeScript) for parsing; optional JavaParser CLI in `parser/`
+- Monaco editor for Java, Python, and C++ input
+- java-parser (TypeScript) for Java parsing; web-tree-sitter WASM for Python; enhanced C++ normalization for C++ parsing; optional JavaParser CLI in `parser/`
 - libSQL / Turso for the cloud database (SQLite locally in dev)
 - Auth.js v5 (next-auth beta) with GitHub OAuth
 - Mermaid for flowchart rendering
@@ -44,6 +44,7 @@ CodeLens is a Java DSA analysis and revision tool for interview preparation. Pas
 - Node.js 18+
 - npm
 - Java JDK 17+ on `PATH` — only for the opt-in run console and JVM parser cross-check, not for analysis
+- g++ (C++17) on `PATH` — only for the opt-in run console (C++), not for analysis
 - The JavaParser 3.26.2 jar in your local Maven cache (`~/.m2/repository/com/github/javaparser/javaparser-core/3.26.2/`) or pointed to via `JAVAPARSER_JAR` — only for the JVM cross-check
 
 ## Environment variables
@@ -168,16 +169,18 @@ Input is treated as hostile by default (`lib/security/`):
 
 Java parsing runs **in-process in TypeScript** via [java-parser](https://www.npmjs.com/package/java-parser) (`lib/parser/javaTs.ts`) — no JVM, no build step, works on serverless, ~200ms per analysis. The original JVM CLI (`parser/src/main/java/codelens/Main.java`, JavaParser-based) is kept as an opt-in cross-check: set `CODELENS_PARSER=java` (requires JDK 17 + `npm run prepare:parser`). A parity test suite verifies both engines produce identical complexity classifications, loop bounds and call targets.
 
-**Python support (v0.5):** Python parses in-process via [web-tree-sitter](https://www.npmjs.com/package/web-tree-sitter) (WASM — zero native builds, same serverless-safe philosophy as java-parser). The grammar WASM is committed under `lib/parser/wasm/` and traced into the serverless bundle, so no network or toolchain is needed at runtime. `POST /api/analyze` accepts `"language": "java" | "python"` (Java is the default); the whole downstream pipeline (complexity, flowchart, call graph, notes, diff, exports, AI quiz prompts) is language-agnostic over the shared IR. Tagged comments work in both syntaxes: `// q:` in Java, `# q:` in Python. A cross-language golden test suite asserts the same algorithm in both languages yields identical complexity verdicts. The Run console remains Java-only.
+**Python support (v0.5):** Python parses in-process via [web-tree-sitter](https://www.npmjs.com/package/web-tree-sitter) (WASM — zero native builds, same serverless-safe philosophy as java-parser). The grammar WASM is committed under `lib/parser/wasm/` and traced into the serverless bundle, so no network or toolchain is needed at runtime.
 
-The parser is heuristic-driven but covers common DSA patterns well: nested loops, enhanced for-loops (`for x in y` / comprehensions map to the same IR loop node), recursion hidden inside return statements and expressions, receiver-qualified library calls (`Arrays.sort`, `heapq.heappush`), and loop-bound classification (constant / parameter / input-dependent / unknown — Python `range(...)` gets the same treatment as Java for-headers). Complexity results always carry a confidence badge and reasoning — they are estimates, not proofs.
+**C++ support (v0.6):** C++ parses via an enhanced normalization pipeline (`lib/parser/cpp.ts`) that transforms C++ source into Java-like syntax for the java-parser engine — preprocessor stripping, `std::` removal, type mapping (vector→ArrayList, map→HashMap), and C++-specific syntax handling. No native builds or WASM required; works on serverless. Tagged comments use `// q:`, `// note:`, `// why:`, `// complexity:` (same as Java). The Run console uses g++ for compilation.
+
+`POST /api/analyze` accepts `"language": "java" | "python" | "cpp"` (Java is the default); the whole downstream pipeline (complexity, flowchart, call graph, notes, diff, exports, AI quiz prompts) is language-agnostic over the shared IR. A cross-language golden test suite asserts the same algorithm in all three languages yields identical complexity verdicts.
 
 
 ## Status
 
-Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parsers — Java via java-parser, Python via tree-sitter WASM; no JVM required), multi-color flowcharts with animated control-flow arrows, embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized, both languages), seven curated samples with deep links (incl. two Python), LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal, Anki export and opt-in BYO-key AI quiz drafting, progress dashboard (heatmap, streak, topic mastery), public share links with OG images, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, self-healing DB connections (stale-stream retry), per-user API rate limiting, transactional analysis saves, hardened production CSP, input-validation + secret-redaction security layer, and a full test suite (341 tests incl. TS/JVM parser parity and Java↔Python cross-language parity).
+Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parsers — Java via java-parser, Python via tree-sitter WASM, C++ via enhanced normalization; no JVM required), multi-color flowcharts with animated control-flow arrows, embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized, all three languages), nine curated samples with deep links (incl. two Python, four C++), LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal, Anki export and opt-in BYO-key AI quiz drafting, progress dashboard (heatmap, streak, topic mastery), public share links with OG images, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, self-healing DB connections (stale-stream retry), per-user API rate limiting, transactional analysis saves, hardened production CSP, input-validation + secret-redaction security layer, and a full test suite (341+ tests incl. TS/JVM parser parity and Java↔Python↔C++ cross-language parity).
 
-v0.3 and v0.4 are shipped (share links, weak-topic drills, mistake journal). v0.5 Python support is shipped. Remaining v0.4 backlog: GitHub journal sync, weekly email digest. See `docs/ROADMAP.md` (local) for the full plan.
+v0.3 and v0.4 are shipped (share links, weak-topic drills, mistake journal). v0.5 Python support is shipped. v0.6 C++ support is shipped. Remaining v0.4 backlog: GitHub journal sync, weekly email digest. See `docs/ROADMAP.md` (local) for the full plan.
 
 ---
 Made by Manab.

@@ -12,7 +12,7 @@ type RunResult = {
   durationMs: number;
 };
 
-export function RunConsole({ code }: { code: string }) {
+export function RunConsole({ code, language = "java" }: { code: string; language?: "java" | "cpp" }) {
   const [stdin, setStdin] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -26,7 +26,7 @@ export function RunConsole({ code }: { code: string }) {
       const res = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: code, stdin }),
+        body: JSON.stringify({ source: code, stdin, language }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Run failed.");

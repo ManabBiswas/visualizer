@@ -59,7 +59,26 @@ const EXAMPLE_PY = `def search(arr, target):
     return -1
 `;
 
-type Language = "java" | "python";
+const EXAMPLE_CPP = `// why: binary search halves the search space each iteration
+// complexity: time O(log n), space O(1)
+#include <vector>
+using namespace std;
+
+int search(vector<int>& arr, int target) {
+    int low = 0, high = arr.size() - 1;
+    // q: why use low + (high - low) / 2 instead of (low + high) / 2?
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        // note: mid belongs to the current search range
+        if (arr[mid] == target) return mid;
+        if (arr[mid] < target) low = mid + 1;
+        else high = mid - 1;
+    }
+    return -1;
+}
+`;
+
+type Language = "java" | "python" | "cpp";
 
 type AnalyzeResult = {
   className: string;
@@ -114,6 +133,7 @@ function EditorPage() {
   // problems — the endpoint loads the problem + IR owner-scoped.
   const [aiOpen, setAiOpen] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [splitRatio, setSplitRatio] = useState<"50" | "60" | "40" | "70" | "30">("50");
   const editorRef = useRef<CodeEditorHandle | null>(null);
 
   // Clear a stale save warning when navigating to a different problem
@@ -148,6 +168,7 @@ function EditorPage() {
       .then((d) => {
         setCode(d.problem.sourceCode);
         if (d.problem.language === "python") setLanguage("python");
+        else if (d.problem.language === "cpp") setLanguage("cpp");
         else setLanguage("java");
         setMeta({
           name: d.problem.name,
@@ -229,7 +250,7 @@ function EditorPage() {
       topicTags: [...sample.topicTags],
       difficulty: sample.difficulty,
     };
-    const sampleLanguage: Language = sample.language === "python" ? "python" : "java";
+    const sampleLanguage: Language = sample.language === "python" ? "python" : sample.language === "cpp" ? "cpp" : "java";
     setCode(sample.source);
     setLanguage(sampleLanguage);
     setMeta(sampleMeta);
@@ -276,15 +297,21 @@ function EditorPage() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Editor pane */}
-        <div className="flex h-full w-1/2 min-w-0 flex-col border-r border-panel-border">
-          <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
-            <div className="flex items-center gap-2">
+        <div className={`flex h-full min-w-0 flex-col border-r border-panel-border ${
+          splitRatio === "30" ? "w-[30%]"
+          : splitRatio === "40" ? "w-[40%]"
+          : splitRatio === "50" ? "w-1/2"
+          : splitRatio === "60" ? "w-[60%]"
+          : "w-[70%]"
+        }`}>
+<div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5 flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="label-caps">Editor</span>
               <span className="font-mono text-code-sm text-text-muted">
-                {language === "python" ? "solution.py" : "Solution.java"}
+                {language === "python" ? "solution.py" : language === "cpp" ? "solution.cpp" : "Solution.java"}
               </span>
-              <div className="ml-2 flex overflow-hidden rounded border border-panel-border" role="group" aria-label="Source language">
-                {(["java", "python"] as Language[]).map((l) => (
+              <div className="ml-2 flex overflow-hidden rounded border border-panel-border flex-wrap" role="group" aria-label="Source language">
+                {(["java", "python", "cpp"] as Language[]).map((l) => (
                   <Button
                     key={l}
                     variant={language === l ? "primary" : "outline"}
@@ -292,7 +319,7 @@ function EditorPage() {
                     onClick={() => {
                       if (language === l) return;
                       setLanguage(l);
-                      setCode(l === "python" ? EXAMPLE_PY : EXAMPLE);
+                      setCode(l === "python" ? EXAMPLE_PY : l === "cpp" ? EXAMPLE_CPP : EXAMPLE);
                       setResults([]);
                       setCallGraph(null);
                       setCallGraphLight(null);
@@ -301,14 +328,14 @@ function EditorPage() {
                       setSaveWarning(null);
                       setError(null);
                     }}
-                    title={l === "python" ? "Switch to Python analysis" : "Switch to Java analysis"}
+                    title={l === "python" ? "Switch to Python analysis" : l === "cpp" ? "Switch to C++ analysis" : "Switch to Java analysis"}
                   >
                     {l}
                   </Button>
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant={sampleOpen ? "primary" : "outline"}
                 size="sm"
@@ -317,7 +344,7 @@ function EditorPage() {
               >
                 {sampleOpen ? "Samples ▾" : "Try a sample ▸"}
               </Button>
-              {RUN_ENABLED && language === "java" && (
+              {RUN_ENABLED && (language === "java" || language === "cpp") && (
                 <Button
                   variant={consoleOpen ? "primary" : "outline"}
                   size="sm"
@@ -337,6 +364,21 @@ function EditorPage() {
               >
                 PDF Report
               </Button>
+              <div className="flex items-center gap-1 ml-2">
+                <span className="text-body-sm text-text-muted hidden sm:inline">Split:</span>
+                <select
+                  value={splitRatio}
+                  onChange={(e) => setSplitRatio(e.target.value as "50" | "60" | "40" | "70" | "30")}
+                  className="rounded border border-panel-border bg-surface-container-high px-2 py-1 text-body-sm text-on-surface focus-visible:ring-1 focus-visible:ring-primary"
+                  aria-label="Editor/Analysis pane split ratio"
+                >
+                  <option value="30">30/70</option>
+                  <option value="40">40/60</option>
+                  <option value="50">50/50</option>
+                  <option value="60">60/40</option>
+                  <option value="70">70/30</option>
+                </select>
+              </div>
               <Button
                 variant="primary"
                 size="sm"
@@ -357,14 +399,14 @@ function EditorPage() {
             <CodeEditor
               value={code}
               onChange={setCode}
-              language={language === "python" ? "python" : "java"}
+              language={language === "python" ? "python" : language === "cpp" ? "cpp" : "java"}
               onMount={(editor) => {
                 editorRef.current = editor;
               }}
               onCursorChange={setActiveLine}
             />
           </div>
-          {consoleOpen && RUN_ENABLED && language === "java" && <RunConsole code={code} />}
+          {consoleOpen && RUN_ENABLED && (language === "java" || language === "cpp") && <RunConsole code={code} language={language} />}
           {saveWarning && (
             <div className="flex shrink-0 items-center gap-3 border-t border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-on-surface-variant">
               <span className="min-w-0 flex-1">{saveWarning}</span>
@@ -387,7 +429,7 @@ function EditorPage() {
         </div>
 
         {/* Analysis pane */}
-        <div className="flex h-full w-1/2 min-w-0 flex-col">
+        <div className="flex h-full flex-1 min-w-0 flex-col">
           {results.length > 1 && (
             <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
               <span className="label-caps shrink-0">Methods</span>
@@ -404,7 +446,7 @@ function EditorPage() {
             </div>
           )}
 
-          <div className="flex shrink-0 border-b border-panel-border bg-surface-container-lowest">
+          <div className="flex shrink-0 border-b border-panel-border bg-surface-container-lowest flex-wrap overflow-x-auto pb-1 gap-1 px-2">
             {((callGraph
               ? ["flowchart", "blocks", "callgraph", "complexity", "notes"]
               : ["flowchart", "blocks", "complexity", "notes"]) as RightTab[]).map((t) => (
@@ -413,7 +455,7 @@ function EditorPage() {
                 variant={tab === t ? "primary" : "ghost"}
                 size="sm"
                 onClick={() => setTab(t)}
-                className="h-auto py-2 px-4"
+                className="h-auto py-2 px-4 whitespace-nowrap shrink-0"
               >
                 {TAB_LABELS[t]}
               </Button>
@@ -525,7 +567,7 @@ function EditorPage() {
                     <code className="font-mono text-code-sm text-note-badge">{"// note: ..."}</code>,{" "}
                     <code className="font-mono text-code-sm text-why-badge">{"// why: ..."}</code>, or{" "}
                     <code className="font-mono text-code-sm text-complexity-badge">{"// complexity: ..."}</code>{" "}
-                    (or the same tags with <code className="font-mono text-code-sm">{"#"}</code> in Python) to build
+                    (same in C++; or with <code className="font-mono text-code-sm">{"#"}</code> in Python) to build
                     your revision notes. They also appear inside the flowchart.
                   </div>
                 ) : (

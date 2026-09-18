@@ -107,7 +107,7 @@ export function buildQuizPrompt(
   analyses: Array<{ method_name: string | null; time_complexity: string | null; space_complexity: string | null }>,
   source: string,
   count: number,
-  language: "java" | "python" = "java",
+  language: "java" | "python" | "cpp" = "java",
   format: QuizFormat = "open",
 ): { system: string; user: string } {
   const safeCount = Math.min(MAX_DRAFT_COUNT, Math.max(MIN_DRAFT_COUNT, Math.floor(count) || 5));
@@ -146,7 +146,7 @@ export function buildQuizPrompt(
     })
     .join("\n");
 
-  const languageLabel = language === "python" ? "Python" : "Java";
+  const languageLabel = language === "python" ? "Python" : language === "cpp" ? "C++" : "Java";
   const isMcq = format === "mcq";
   const mcqInstructions = isMcq
     ? [

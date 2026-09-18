@@ -113,6 +113,67 @@ function runProcess(
   });
 }
 
+export async function runCpp(
+  source: string,
+  stdin = "",
+  opts: { compileTimeoutMs?: number; runTimeoutMs?: number } = {},
+): Promise<RunResult> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codelens-run-"));
+  const cppFile = path.join(dir, "main.cpp");
+  try {
+    fs.writeFileSync(cppFile, source, "utf-8");
+
+    const compile = await runProcess(exe("g++"), ["-std=c++17", "-O2", "-pipe", "-o", "main", cppFile], {
+      timeoutMs: opts.compileTimeoutMs ?? DEFAULT_COMPILE_TIMEOUT_MS,
+      cwd: dir,
+    });
+    if (compile.timedOut) {
+      return { ok: false, stage: "compile", stdout: "", stderr: "Compilation timed out.", exitCode: null, timedOut: true, mainClass: null };
+    }
+    if (compile.code !== 0) {
+      return {
+        ok: false,
+        stage: "compile",
+        stdout: compile.stdout,
+        stderr: compile.stderr || `g++ exited with code ${compile.code}`,
+        exitCode: compile.code,
+        timedOut: false,
+        mainClass: null,
+      };
+    }
+
+    const run = await runProcess(exe("./main"), [], {
+      timeoutMs: opts.runTimeoutMs ?? DEFAULT_RUN_TIMEOUT_MS,
+      stdin,
+      cwd: dir,
+    });
+
+    if (run.timedOut) {
+      return {
+        ok: false,
+        stage: "run",
+        stdout: run.stdout,
+        stderr: `${run.stderr}\n[stopped: time limit exceeded]`.trim(),
+        exitCode: null,
+        timedOut: true,
+        mainClass: null,
+      };
+    }
+
+    return {
+      ok: run.code === 0,
+      stage: "run",
+      stdout: run.stdout,
+      stderr: run.stderr,
+      exitCode: run.code,
+      timedOut: false,
+      mainClass: null,
+    };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export async function runJava(
   source: string,
   stdin = "",

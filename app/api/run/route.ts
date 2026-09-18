@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runJava } from "@/lib/run/execute";
-import { validateSource, validateStdin } from "@/lib/security/validate";
+import { runJava, runCpp } from "@/lib/run/execute";
+import { validateSource, validateStdin, validateLanguage } from "@/lib/security/validate";
 import { isRateLimited, tryAcquireRunSlot, releaseRunSlot } from "@/lib/security/rateLimit";
 import { getAuthedUserId } from "@/lib/api/user";
 import { redactSecrets } from "@/lib/security/env";
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   // The runner executes arbitrary user code, so it is behind the login wall.
   const userId = await getAuthedUserId();
   if (!userId) {
-    return NextResponse.json({ error: "Sign in to run Java code." }, { status: 401 });
+    return NextResponse.json({ error: "Sign in to run code." }, { status: 401 });
   }
 
   let body: unknown;
@@ -35,9 +35,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const { source: rawSource, stdin: rawStdin } = (body ?? {}) as {
+  const { source: rawSource, stdin: rawStdin, language: rawLanguage } = (body ?? {}) as {
     source?: unknown;
     stdin?: unknown;
+    language?: unknown;
   };
 
   const sourceCheck = validateSource(rawSource);
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
   if (!stdinCheck.ok) {
     return NextResponse.json({ error: stdinCheck.error }, { status: 400 });
   }
+  const languageCheck = validateLanguage(rawLanguage);
+  if (!languageCheck.ok) {
+    return NextResponse.json({ error: languageCheck.error }, { status: 400 });
+  }
+  const language = languageCheck.value;
 
   if (await isRateLimited(`run:${clientIp(req)}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
     return NextResponse.json(
@@ -64,7 +70,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runJava(sourceCheck.value, stdinCheck.value);
+    const result = language === "cpp"
+      ? await runCpp(sourceCheck.value, stdinCheck.value)
+      : await runJava(sourceCheck.value, stdinCheck.value);
     // Setup failures (no main method) are user errors; everything else is a
     // legitimate result of running the code, even a non-zero exit.
     if (result.stage === "setup") {
