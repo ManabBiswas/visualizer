@@ -175,10 +175,7 @@ Java parsing runs **in-process in TypeScript** via [java-parser](https://www.npm
 
 `POST /api/analyze` accepts `"language": "java" | "python" | "cpp"` (Java is the default); the whole downstream pipeline (complexity, flowchart, call graph, notes, diff, exports, AI quiz prompts) is language-agnostic over the shared IR. A cross-language golden test suite asserts the same algorithm in all three languages yields identical complexity verdicts.
 
-
-## Status
-
-Working product, deployed at <https://visualizer-cyan-tau.vercel.app>: analysis pipeline (in-process TS parsers — Java via java-parser, Python via tree-sitter WASM, C++ via enhanced normalization; no JVM required), multi-color flowcharts with animated control-flow arrows, embedded comment notes, tooltips, and cursor↔diagram sync, call graph with complexity badges, diff mode (brute force vs optimized, all three languages), nine curated samples with deep links (incl. two Python, four C++), LeetCode URL import, spaced-repetition quiz with focus sessions, mistake journal, Anki export and opt-in BYO-key AI quiz drafting, progress dashboard (heatmap, streak, topic mastery), public share links with OG images, PNG/SVG/Markdown/CSV/PDF exports, time+space self-check scoring, multi-user GitHub auth with per-user data isolation, cloud Turso database, self-healing DB connections (stale-stream retry), per-user API rate limiting, transactional analysis saves, hardened production CSP, input-validation + secret-redaction security layer, and a full test suite (341+ tests incl. TS/JVM parser parity and Java↔Python↔C++ cross-language parity).
+---
 
 v0.3 and v0.4 are shipped (share links, weak-topic drills, mistake journal). v0.5 Python support is shipped. v0.6 C++ support is shipped. Remaining v0.4 backlog: GitHub journal sync, weekly email digest. See `docs/ROADMAP.md` (local) for the full plan.
 
