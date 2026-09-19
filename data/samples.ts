@@ -241,7 +241,7 @@ export const SAMPLES: Sample[] = [
 int main() {
     // why: print a greeting to the console
     std::cout << "Hello, World!" << std::endl;
-    // q: why use std::endl instead of "\n"?
+    // q: why use std::endl instead of "\\n"?
     return 0;
 }`,
   },

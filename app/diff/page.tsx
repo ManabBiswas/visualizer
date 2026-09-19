@@ -6,6 +6,7 @@ import { FlowchartPanel } from "@/components/FlowchartPanel";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { diffComplexity, ComplexityDelta } from "@/lib/diff/compare";
 import { MethodIR } from "@/lib/ir";
+import { BlockComplexity } from "@/lib/complexity/blocks";
 
 const BRUTE_EXAMPLE = `class Solution {
     int[] twoSum(int[] nums, int target) {
@@ -50,12 +51,47 @@ const OPTIMIZED_EXAMPLE_PY = `def two_sum(nums, target):
     return []
 `;
 
+const BRUTE_EXAMPLE_CPP = `#include <vector>
+using namespace std;
+
+class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        for (int i = 0; i < nums.size(); i++) {
+            for (int j = i + 1; j < nums.size(); j++) {
+                if (nums[i] + nums[j] == target) return {i, j};
+            }
+        }
+        return {};
+    }
+};
+`;
+
+const OPTIMIZED_EXAMPLE_CPP = `#include <vector>
+#include <unordered_map>
+using namespace std;
+
+class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        unordered_map<int, int> seen;
+        for (int i = 0; i < nums.size(); i++) {
+            int need = target - nums[i];
+            if (seen.count(need)) return {seen[need], i};
+            seen[nums[i]] = i;
+        }
+        return {};
+    }
+};
+`;
+
+type Language = "java" | "python" | "cpp";
+
 type SideResult = {
   method: MethodIR;
   complexity: ComplexityResult;
+  blockComplexity: BlockComplexity[];
 };
-
-type Language = "java" | "python";
 
 const VERDICT_STYLE: Record<ComplexityDelta["time"]["verdict"], string> = {
   improved: "border-success/50 bg-success/10 text-success",
@@ -88,6 +124,7 @@ export default function DiffPage() {
   const [optimizedResult, setOptimizedResult] = useState<SideResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
   const bruteEditor = useRef<CodeEditorHandle | null>(null);
   const optimizedEditor = useRef<CodeEditorHandle | null>(null);
 
@@ -96,6 +133,26 @@ export default function DiffPage() {
     ref.current?.revealLineInCenter(line);
     ref.current?.setPosition({ lineNumber: line, column: 1 });
     ref.current?.focus();
+  }
+
+  async function downloadReport() {
+    const target = optimizedResult || bruteResult;
+    if (!target) return;
+    setReporting(true);
+    try {
+      const { downloadPdfReport } = await import("@/lib/export/report");
+      await downloadPdfReport({
+        title: `Diff Report — ${target.method.name} (${language})`,
+        code: optimized || brute,
+        method: target.method,
+        complexity: target.complexity,
+        blockComplexity: target.blockComplexity ?? [],
+      });
+    } catch (e) {
+      setError(`PDF export failed: ${(e as Error).message}`);
+    } finally {
+      setReporting(false);
+    }
   }
 
   async function analyzeBoth() {
@@ -118,8 +175,16 @@ export default function DiffPage() {
   function switchLanguage(l: Language) {
     if (language === l) return;
     setLanguage(l);
-    setBrute(l === "python" ? BRUTE_EXAMPLE_PY : BRUTE_EXAMPLE);
-    setOptimized(l === "python" ? OPTIMIZED_EXAMPLE_PY : OPTIMIZED_EXAMPLE);
+    if (l === "python") {
+      setBrute(BRUTE_EXAMPLE_PY);
+      setOptimized(OPTIMIZED_EXAMPLE_PY);
+    } else if (l === "cpp") {
+      setBrute(BRUTE_EXAMPLE_CPP);
+      setOptimized(OPTIMIZED_EXAMPLE_CPP);
+    } else {
+      setBrute(BRUTE_EXAMPLE);
+      setOptimized(OPTIMIZED_EXAMPLE);
+    }
     setBruteResult(null);
     setOptimizedResult(null);
     setError(null);
@@ -141,7 +206,7 @@ export default function DiffPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex overflow-hidden rounded border border-panel-border" role="group" aria-label="Source language">
-            {(["java", "python"] as Language[]).map((l) => (
+            {(["java", "python", "cpp"] as Language[]).map((l) => (
               <button
                 key={l}
                 onClick={() => switchLanguage(l)}
@@ -155,6 +220,13 @@ export default function DiffPage() {
               </button>
             ))}
           </div>
+          <button
+            onClick={downloadReport}
+            disabled={reporting || (!bruteResult && !optimizedResult)}
+            className="rounded border border-panel-border bg-surface-container-high px-3 py-1.5 text-body-sm font-medium text-on-surface hover:bg-surface-container disabled:opacity-50"
+          >
+            {reporting ? "Generating…" : "PDF Report"}
+          </button>
           <button
             onClick={analyzeBoth}
             disabled={loading}
@@ -180,7 +252,7 @@ export default function DiffPage() {
             <CodeEditor
               value={brute}
               onChange={setBrute}
-              language={language === "python" ? "python" : "java"}
+              language={language === "python" ? "python" : language === "cpp" ? "cpp" : "java"}
               padding={{ top: 8, bottom: 8 }}
               onMount={(editor) => {
                 bruteEditor.current = editor;
@@ -196,7 +268,7 @@ export default function DiffPage() {
             <CodeEditor
               value={optimized}
               onChange={setOptimized}
-              language={language === "python" ? "python" : "java"}
+              language={language === "python" ? "python" : language === "cpp" ? "cpp" : "java"}
               padding={{ top: 8, bottom: 8 }}
               onMount={(editor) => {
                 optimizedEditor.current = editor;

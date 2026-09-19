@@ -8,7 +8,7 @@ export type LoopBoundType = "constant" | "parameter" | "input-dependent" | "unkn
 export type StatementNode =
   | {
       type: "loop";
-      kind: "for" | "while" | "do-while";
+      kind: "for" | "while" | "do-while" | "for-range";
       line: number;
       endLine: number;
       boundType: LoopBoundType;

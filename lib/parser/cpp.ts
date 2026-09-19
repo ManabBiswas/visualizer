@@ -80,7 +80,7 @@ function identifiersIn(text: string): string[] {
 }
 
 function bareName(n: TSNode | null): string {
-  return n && n.type === "identifier" ? n.text : "?";
+  return n && (n.type === "identifier" || n.type === "type_identifier" || n.type === "field_identifier") ? n.text : "?";
 }
 
 function callNodes(calls: { target: string; args: string; line: number; isRecursive: boolean }[]): StatementNode[] {
@@ -163,6 +163,27 @@ function emitForStatement(n: TSNode, ctx: EmitCtx): StatementNode[] {
     endLine: n.endPosition.row + 1,
     boundType,
     condition: `${loopVars.join(", ") || "init"} ; ${condition} ; ${update ? update.text.replace(/\s+/g, " ").trim() : ""}`,
+    body: body ? emitBlock(body, ctx) : [],
+  });
+  return out;
+}
+
+function emitForRangeLoop(n: TSNode, ctx: EmitCtx): StatementNode[] {
+  const typeNode = n.childForFieldName("type");
+  const declarator = n.childForFieldName("declarator");
+  const right = n.childForFieldName("right");
+  const body = n.childForFieldName("body");
+  const loopVar = declarator ? bareName(declarator) : "";
+  const rangeExpr = right ? right.text.replace(/\s+/g, " ").trim() : "";
+  const boundType = classifyCppLoopBound(rangeExpr, [loopVar], ctx.paramNames);
+  const out: StatementNode[] = [];
+  out.push({
+    type: "loop",
+    kind: "for-range",
+    line: line(n),
+    endLine: n.endPosition.row + 1,
+    boundType,
+    condition: `${loopVar} : ${rangeExpr}`,
     body: body ? emitBlock(body, ctx) : [],
   });
   return out;
@@ -291,6 +312,8 @@ function emitStatement(n: TSNode, ctx: EmitCtx): StatementNode[] {
       return [{ type: "statement", line: line(n), text: firstLine(n.text) }];
     case "for_statement":
       return emitForStatement(n, ctx);
+    case "for_range_loop":
+      return emitForRangeLoop(n, ctx);
     case "while_statement":
       return emitWhileStatement(n, ctx);
     case "do_statement":
@@ -369,12 +392,12 @@ function extractClass(cls: TSNode): ClassIR {
   const methods: MethodIR[] = [];
   if (body) {
     for (const n of body.namedChildren) {
-      if (n.type === "function_definition" || n.type === "field_declaration") {
+      if (n.type === "function_definition") {
+        methods.push(extractMethod(n));
+      } else if (n.type === "field_declaration") {
         for (const c of n.namedChildren) {
           if (c.type === "function_definition") methods.push(extractMethod(c));
         }
-      } else if (n.type === "function_definition") {
-        methods.push(extractMethod(n));
       }
     }
   }
