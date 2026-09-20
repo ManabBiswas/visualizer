@@ -11,7 +11,7 @@ export const MAX_TOPIC_TAGS = 10;
 export const MAX_TOPIC_CHARS = 50;
 export const MAX_QUERY_PARAM_CHARS = 50;
 export const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const;
-export const LANGUAGES = ["java", "python", "cpp"] as const;
+export const LANGUAGES = ["java", "python", "cpp", "c"] as const;
 export type Language = (typeof LANGUAGES)[number];
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };

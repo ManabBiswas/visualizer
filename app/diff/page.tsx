@@ -85,7 +85,59 @@ public:
 };
 `;
 
-type Language = "java" | "python" | "cpp";
+const BRUTE_EXAMPLE_C = `#include <stdio.h>
+#include <stdlib.h>
+
+int* twoSum(int* nums, int numsSize, int target, int* returnSize) {
+    for (int i = 0; i < numsSize; i++) {
+        for (int j = i + 1; j < numsSize; j++) {
+            if (nums[i] + nums[j] == target) {
+                *returnSize = 2;
+                int* result = malloc(2 * sizeof(int));
+                result[0] = i;
+                result[1] = j;
+                return result;
+            }
+        }
+    }
+    *returnSize = 0;
+    return NULL;
+}
+`;
+
+const OPTIMIZED_EXAMPLE_C = `#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+    int key;
+    int value;
+} HashEntry;
+
+int* twoSum(int* nums, int numsSize, int target, int* returnSize) {
+    HashEntry* seen = calloc(numsSize, sizeof(HashEntry));
+    int seenCount = 0;
+    
+    for (int i = 0; i < numsSize; i++) {
+        int need = target - nums[i];
+        for (int j = 0; j < seenCount; j++) {
+            if (seen[j].key == need) {
+                *returnSize = 2;
+                int* result = malloc(2 * sizeof(int));
+                result[0] = seen[j].value;
+                result[1] = i;
+                free(seen);
+                return result;
+            }
+        }
+        seen[seenCount++] = (HashEntry){nums[i], i};
+    }
+    *returnSize = 0;
+    free(seen);
+    return NULL;
+}
+`;
+
+type Language = "java" | "python" | "cpp" | "c";
 
 type SideResult = {
   method: MethodIR;
@@ -181,6 +233,9 @@ export default function DiffPage() {
     } else if (l === "cpp") {
       setBrute(BRUTE_EXAMPLE_CPP);
       setOptimized(OPTIMIZED_EXAMPLE_CPP);
+    } else if (l === "c") {
+      setBrute(BRUTE_EXAMPLE_C);
+      setOptimized(OPTIMIZED_EXAMPLE_C);
     } else {
       setBrute(BRUTE_EXAMPLE);
       setOptimized(OPTIMIZED_EXAMPLE);
@@ -206,7 +261,7 @@ export default function DiffPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex overflow-hidden rounded border border-panel-border" role="group" aria-label="Source language">
-            {(["java", "python", "cpp"] as Language[]).map((l) => (
+            {(["java", "python", "cpp", "c"] as Language[]).map((l) => (
               <button
                 key={l}
                 onClick={() => switchLanguage(l)}
@@ -252,7 +307,7 @@ export default function DiffPage() {
             <CodeEditor
               value={brute}
               onChange={setBrute}
-              language={language === "python" ? "python" : language === "cpp" ? "cpp" : "java"}
+              language={language === "python" ? "python" : language === "cpp" ? "cpp" : language === "c" ? "cpp" : "java"}
               padding={{ top: 8, bottom: 8 }}
               onMount={(editor) => {
                 bruteEditor.current = editor;
@@ -268,7 +323,7 @@ export default function DiffPage() {
             <CodeEditor
               value={optimized}
               onChange={setOptimized}
-              language={language === "python" ? "python" : language === "cpp" ? "cpp" : "java"}
+              language={language === "python" ? "python" : language === "cpp" ? "cpp" : language === "c" ? "cpp" : "java"}
               padding={{ top: 8, bottom: 8 }}
               onMount={(editor) => {
                 optimizedEditor.current = editor;

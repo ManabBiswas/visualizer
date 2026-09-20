@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   try {
     ir = await parseSource(sourceCheck.value, language);
   } catch (err) {
-    const label = language === "python" ? "Python" : language === "cpp" ? "C++" : "Java";
+    const label = language === "python" ? "Python" : language === "cpp" ? "C++" : language === "c" ? "C" : "Java";
     return NextResponse.json(
       { error: `Failed to parse ${label} source: ${(err as Error).message}` },
       { status: 422 },

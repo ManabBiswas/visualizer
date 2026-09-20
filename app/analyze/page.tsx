@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback, KeyboardEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -78,7 +78,14 @@ int search(vector<int>& arr, int target) {
 }
 `;
 
-type Language = "java" | "python" | "cpp";
+type Language = "java" | "python" | "cpp" | "c";
+
+const LANGUAGE_CONFIG: Record<Language, { label: string; icon: string; ext: string; monaco: string }> = {
+  java: { label: "Java", icon: "", ext: "Solution.java", monaco: "java" },
+  python: { label: "Python", icon: "", ext: "solution.py", monaco: "python" },
+  cpp: { label: "C++", icon: "", ext: "solution.cpp", monaco: "cpp" },
+  c: { label: "C", icon: "", ext: "solution.c", monaco: "c" },
+};
 
 type AnalyzeResult = {
   className: string;
@@ -89,12 +96,12 @@ type AnalyzeResult = {
 
 type RightTab = "flowchart" | "blocks" | "callgraph" | "complexity" | "notes";
 
-const TAB_LABELS: Record<RightTab, string> = {
-  flowchart: "Flowchart",
-  blocks: "Blocks",
-  callgraph: "Call Graph",
-  complexity: "Complexity",
-  notes: "Notes",
+const TAB_CONFIG: Record<RightTab, { label: string; icon: string; shortcut: string }> = {
+  flowchart: { label: "Flowchart", icon: "", shortcut: "1" },
+  blocks: { label: "Blocks", icon: "", shortcut: "2" },
+  callgraph: { label: "Call Graph", icon: "", shortcut: "3" },
+  complexity: { label: "Complexity", icon: "", shortcut: "4" },
+  notes: { label: "Notes", icon: "", shortcut: "5" },
 };
 
 // Code execution is opt-in per deployment (it shells out to a local JVM,
@@ -133,8 +140,38 @@ function EditorPage() {
   // problems — the endpoint loads the problem + IR owner-scoped.
   const [aiOpen, setAiOpen] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
-  const [splitRatio, setSplitRatio] = useState<"50" | "60" | "40" | "70" | "30">("50");
+  const [splitRatio, setSplitRatio] = useState(50);
+  const [isResizing, setIsResizing] = useState(false);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<CodeEditorHandle | null>(null);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!editorContainerRef.current) return;
+      const containerRect = editorContainerRef.current.getBoundingClientRect();
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      
+      // Constrain to 20% - 80% for better UX
+      if (newWidth > 20 && newWidth < 80) {
+        setSplitRatio(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   // Clear a stale save warning when navigating to a different problem
   // (render-phase state adjustment — React's recommended pattern).
@@ -187,6 +224,39 @@ function EditorPage() {
     editorRef.current?.focus();
     setActiveLine(line);
   }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case "Enter":
+            e.preventDefault();
+            if (!loading) void analyze();
+            break;
+          case "s":
+            e.preventDefault();
+            if (current && !reporting) void downloadReport();
+            break;
+          case "1":
+          case "2":
+          case "3":
+          case "4":
+          case "5": {
+            const tabs: RightTab[] = ["flowchart", "blocks", "callgraph", "complexity", "notes"];
+            const idx = parseInt(e.key, 10) - 1;
+            if (tabs[idx]) {
+              e.preventDefault();
+              setTab(tabs[idx]);
+            }
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown as EventListener);
+    return () => window.removeEventListener("keydown", handleKeyDown as EventListener);
+  }, [loading, reporting]);
 
   // Takes meta explicitly: loadSample() calls this in the same tick as
   // setMeta(), so reading the `meta` state here would see the PREVIOUS
@@ -250,7 +320,7 @@ function EditorPage() {
       topicTags: [...sample.topicTags],
       difficulty: sample.difficulty,
     };
-    const sampleLanguage: Language = sample.language === "python" ? "python" : sample.language === "cpp" ? "cpp" : "java";
+    const sampleLanguage: Language = sample.language === "python" ? "python" : sample.language === "cpp" ? "cpp" : sample.language === "c" ? "c" : "java";
     setCode(sample.source);
     setLanguage(sampleLanguage);
     setMeta(sampleMeta);
@@ -297,21 +367,15 @@ function EditorPage() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Editor pane */}
-        <div className={`flex h-full min-w-0 flex-col border-r border-panel-border ${
-          splitRatio === "30" ? "w-[30%]"
-          : splitRatio === "40" ? "w-[40%]"
-          : splitRatio === "50" ? "w-1/2"
-          : splitRatio === "60" ? "w-[60%]"
-          : "w-[70%]"
-        }`}>
-<div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-1.5 flex-wrap gap-2">
+        <div className="flex h-full min-w-0 flex-col border-r border-panel-border" style={{ width: `${splitRatio}%` }}>
+          <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-2 flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="label-caps">Editor</span>
               <span className="font-mono text-code-sm text-text-muted">
-                {language === "python" ? "solution.py" : language === "cpp" ? "solution.cpp" : "Solution.java"}
+                {LANGUAGE_CONFIG[language].ext}
               </span>
               <div className="ml-2 flex overflow-hidden rounded border border-panel-border flex-wrap" role="group" aria-label="Source language">
-                {(["java", "python", "cpp"] as Language[]).map((l) => (
+                {(["java", "python", "cpp", "c"] as Language[]).map((l) => (
                   <Button
                     key={l}
                     variant={language === l ? "primary" : "outline"}
@@ -319,7 +383,7 @@ function EditorPage() {
                     onClick={() => {
                       if (language === l) return;
                       setLanguage(l);
-                      setCode(l === "python" ? EXAMPLE_PY : l === "cpp" ? EXAMPLE_CPP : EXAMPLE);
+                      setCode(l === "python" ? EXAMPLE_PY : l === "cpp" ? EXAMPLE_CPP : l === "c" ? "" : EXAMPLE);
                       setResults([]);
                       setCallGraph(null);
                       setCallGraphLight(null);
@@ -328,9 +392,10 @@ function EditorPage() {
                       setSaveWarning(null);
                       setError(null);
                     }}
-                    title={l === "python" ? "Switch to Python analysis" : l === "cpp" ? "Switch to C++ analysis" : "Switch to Java analysis"}
+                    title={`Switch to ${LANGUAGE_CONFIG[l].label}`}
+                    className="flex items-center gap-1"
                   >
-                    {l}
+                    <span>{LANGUAGE_CONFIG[l].label}</span>
                   </Button>
                 ))}
               </div>
@@ -341,8 +406,9 @@ function EditorPage() {
                 size="sm"
                 onClick={() => setSampleOpen((o) => !o)}
                 title="Curated samples with rich tagged comments — one click to analyze"
+                className="flex items-center gap-1"
               >
-                {sampleOpen ? "Samples ▾" : "Try a sample ▸"}
+                <span>{sampleOpen ? "Hide Samples" : "Try a Sample"}</span>
               </Button>
               {RUN_ENABLED && (language === "java" || language === "cpp") && (
                 <Button
@@ -350,8 +416,9 @@ function EditorPage() {
                   size="sm"
                   onClick={() => setConsoleOpen((o) => !o)}
                   title="Toggle the run console (execute your code with stdin input)"
+                  className="flex items-center gap-1"
                 >
-                  {consoleOpen ? "Console ▾" : "Console ▸"}
+                  <span>{consoleOpen ? "Hide Console" : "Run Console"}</span>
                 </Button>
               )}
               <Button
@@ -359,39 +426,26 @@ function EditorPage() {
                 size="sm"
                 onClick={downloadReport}
                 disabled={!current || reporting}
-                title="Download a light-theme PDF report: code, complexity, blocks, notes and flowchart"
+                title="Download a light-theme PDF report (⌘S)"
                 loading={reporting}
+                className="flex items-center gap-1"
               >
-                PDF Report
+                <span>PDF Report</span>
               </Button>
-              <div className="flex items-center gap-1 ml-2">
-                <span className="text-body-sm text-text-muted hidden sm:inline">Split:</span>
-                <select
-                  value={splitRatio}
-                  onChange={(e) => setSplitRatio(e.target.value as "50" | "60" | "40" | "70" | "30")}
-                  className="rounded border border-panel-border bg-surface-container-high px-2 py-1 text-body-sm text-on-surface focus-visible:ring-1 focus-visible:ring-primary"
-                  aria-label="Editor/Analysis pane split ratio"
-                >
-                  <option value="30">30/70</option>
-                  <option value="40">40/60</option>
-                  <option value="50">50/50</option>
-                  <option value="60">60/40</option>
-                  <option value="70">70/30</option>
-                </select>
-              </div>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={() => void analyze()}
                 disabled={loading}
                 loading={loading}
+                className="flex items-center gap-1"
               >
-                Analyze
+                <span>Analyze</span>
               </Button>
             </div>
           </div>
           {sampleOpen && (
-            <div className="shrink-0 border-b border-panel-border bg-surface-container-lowest">
+            <div className="shrink-0 border-b border-panel-border bg-surface-container-lowest max-h-64 overflow-y-auto">
               <SamplePicker samples={SAMPLES} onSelect={loadSample} />
             </div>
           )}
@@ -399,7 +453,7 @@ function EditorPage() {
             <CodeEditor
               value={code}
               onChange={setCode}
-              language={language === "python" ? "python" : language === "cpp" ? "cpp" : "java"}
+              language={LANGUAGE_CONFIG[language].monaco}
               onMount={(editor) => {
                 editorRef.current = editor;
               }}
@@ -427,7 +481,15 @@ function EditorPage() {
             </div>
           )}
         </div>
-
+        {/* Resize Handle */}
+        <div
+          className="w-1 cursor-col-resize bg-panel-border hover:bg-primary transition-colors z-10"
+          onMouseDown={() => {
+            setIsResizing(true);
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+          }}
+        />
         {/* Analysis pane */}
         <div className="flex h-full flex-1 min-w-0 flex-col">
           {results.length > 1 && (
@@ -450,15 +512,16 @@ function EditorPage() {
             {((callGraph
               ? ["flowchart", "blocks", "callgraph", "complexity", "notes"]
               : ["flowchart", "blocks", "complexity", "notes"]) as RightTab[]).map((t) => (
-              <Button
-                key={t}
-                variant={tab === t ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setTab(t)}
-                className="h-auto py-2 px-4 whitespace-nowrap shrink-0"
-              >
-                {TAB_LABELS[t]}
-              </Button>
+                <Button
+                  key={t}
+                  variant={tab === t ? "primary" : "ghost"}
+                  size="sm"
+                  onClick={() => setTab(t)}
+                  className="h-auto py-2 px-4 whitespace-nowrap shrink-0 flex items-center gap-1.5"
+                  title={`${TAB_CONFIG[t].label} (⌘${TAB_CONFIG[t].shortcut})`}
+                >
+                  <span>{TAB_CONFIG[t].label}</span>
+                </Button>
             ))}
           </div>
 
