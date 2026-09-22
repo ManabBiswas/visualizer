@@ -8,7 +8,7 @@ const APP_VERSION = "0.4.0";
 const FEATURES = [
   {
     title: "Flowcharts",
-    body: "Every method becomes an interactive multi-color flowchart. Hover a node to jump to that line — pan, zoom, and export as PNG or SVG.",
+    body: "Every method becomes an interactive multi-color flowchart — or view the whole program as a unified diagram with cross-method call edges. Hover a node to jump to that line — pan, zoom, and export as PNG or SVG.",
     accent: "text-primary",
   },
   {

@@ -20,7 +20,7 @@ import { Button } from "@/components/Button";
 import { SAMPLES, findSample, type Sample } from "@/data/samples";
 import { ComplexityResult } from "@/lib/complexity/analyze";
 import { BlockComplexity } from "@/lib/complexity/blocks";
-import { CommentTag, MethodIR } from "@/lib/ir";
+import { CommentTag, MethodIR, ProgramIR } from "@/lib/ir";
 import { isValidId } from "@/lib/security/validate";
 import { toast } from "@/components/Toast";
 
@@ -117,6 +117,10 @@ function EditorPage() {
   const [language, setLanguage] = useState<Language>("java");
   const [meta, setMeta] = useState<ProblemMeta>({ name: "", link: "", topicTags: [], difficulty: "" });
   const [results, setResults] = useState<AnalyzeResult[]>([]);
+  // Rebuilt from `results` every analysis so the FlowchartPanel can render the
+  // whole-program view (every class as a subgraph, cross-method call edges).
+  // Cheap to rebuild — just references to the existing method IR objects.
+  const [programIr, setProgramIr] = useState<ProgramIR | null>(null);
   const [callGraph, setCallGraph] = useState<string | null>(null);
   const [callGraphLight, setCallGraphLight] = useState<string | null>(null);
   // nodeId -> tooltip text, returned by the server. Re-injected as SVG
@@ -266,6 +270,22 @@ function EditorPage() {
         throw new Error("Analysis failed: the server returned an unexpected response.");
       }
       setResults(data.results);
+      // Rebuild the program IR from the flat results list so the whole-program
+      // flowchart view has every method grouped by class. Empty results →
+      // null (hides the whole-program toggle in the panel).
+      if (data.results.length > 0) {
+        const classMap = new Map<string, MethodIR[]>();
+        for (const r of data.results) {
+          const list = classMap.get(r.className) ?? [];
+          list.push(r.method);
+          classMap.set(r.className, list);
+        }
+        setProgramIr({
+          classes: Array.from(classMap.entries()).map(([name, methods]) => ({ name, methods })),
+        });
+      } else {
+        setProgramIr(null);
+      }
       setCallGraph(data.callGraph ?? null);
       setCallGraphLight(data.callGraphLight ?? null);
       setCallGraphTooltips(data.callGraphTooltips ?? null);
@@ -386,6 +406,7 @@ function EditorPage() {
                       setLanguage(l);
                       setCode(l === "python" ? EXAMPLE_PY : l === "cpp" ? EXAMPLE_CPP : l === "c" ? "" : EXAMPLE);
                       setResults([]);
+                      setProgramIr(null);
                       setCallGraph(null);
                       setCallGraphLight(null);
                       setCallGraphTooltips(null);
@@ -548,7 +569,12 @@ function EditorPage() {
                 {tab === "flowchart" && (
                   <FlowchartPanel
                     method={current?.method ?? null}
+                    program={programIr}
                     onNodeHover={(line) => line && jumpToLine(line)}
+                    onMethodSelect={(methodName) => {
+                      const idx = results.findIndex((r) => r.method.name === methodName);
+                      if (idx >= 0) setActiveMethod(idx);
+                    }}
                     activeLine={activeLine}
                   />
                 )}

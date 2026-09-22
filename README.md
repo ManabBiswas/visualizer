@@ -9,7 +9,7 @@ CodeLens is a DSA analysis and revision tool for interview preparation. Paste a 
 - **LeetCode URL import**: paste a `leetcode.com/problems/…` link and the metadata bar auto-fills the name, difficulty and topic tags (unofficial GraphQL, host-allowlisted SSRF guard, graceful fallback to manual entry)
 - **Multi-user with GitHub sign-in** (Auth.js v5): each account gets a private problem log, quiz deck, and notes — enforced at every API route, not just hidden in the UI
 - Saves problems to **Turso** (libSQL) in the cloud, or a local SQLite file in dev — same schema, same code path
-- Renders **multi-color flowcharts** — loops, decisions, calls, recursion, and returns each get their own color, with actual code (conditions, statements, call args) in the node labels and a built-in color legend. Diagrams open in a **pan/zoom viewer**: drag to pan, scroll or pinch to zoom, Fit/100% buttons, native size by default — plus hover tooltips with full node text, hover glow, and a bidirectional cursor↔flowchart highlight (move the editor caret and the matching node pulses)
+- Renders **multi-color flowcharts** — loops, decisions, calls, recursion, and returns each get their own color, with actual code (conditions, statements, call args) in the node labels and a built-in color legend. Diagrams open in a **pan/zoom viewer**: drag to pan, scroll or pinch to zoom, Fit/100% buttons, native size by default — plus hover tooltips with full node text, hover glow, and a bidirectional cursor↔flowchart highlight (move the editor caret and the matching node pulses). For multi-method programs a **Whole program** toggle replaces the per-method view with one unified diagram: every class becomes a Mermaid subgraph, every method is a nested subgraph inside it, cross-method calls render as dotted arrows between subgraphs, and shared library calls (Java: `Arrays.sort`, Python: `heapq.heappush`) live in a single dimmed external pool
 - **Blocks walkthrough**: the method as readable per-section block cards — one card per statement with type badges, loop-bound hints, recursion flags, nested indentation, and jump-to-line — for understanding the structure without reading the graph
 - Shows your **tagged comments inside the flowchart** as note nodes attached to the code they annotate (`// q:`, `// note:`, `// why:`, `// complexity:` — standalone or trailing after code)
 - **Run console**: execute your code with real console input — type stdin (what your `Scanner` / `BufferedReader` reads for Java, `cin` for C++ and C), hit Run (or Ctrl+Enter), and see stdout/stderr, exit code and timing. Compiles and runs in an isolated temp directory with hard timeouts, output caps, JVM heap limits (Java) or memory limits (C++/C), rate limiting and a concurrency guard. **Local-only feature** — gated behind `NEXT_PUBLIC_ENABLE_RUN=1` because serverless hosts have no JVM/compiler; the endpoint itself returns 501 on deployments built without the flag
@@ -113,7 +113,7 @@ lib/
   parser/             TypeScript Java parser (primary) + JVM runner (fallback)
   complexity/         complexity heuristics
   notes/              comment tag extraction
-  flowchart/          IR -> Mermaid conversion (multi-color, comment notes, call graph)
+  flowchart/         IR -> Mermaid conversion (multi-color, comment notes, call graph, whole-program diagram with cross-method edges)
   diff/               complexity delta comparison
   spaced/             SM-2 scheduler + weak-topic focus-session selection
   progress/           dashboard statistics (pure functions over card/problem rows)
