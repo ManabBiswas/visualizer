@@ -5,14 +5,14 @@ CodeLens is a DSA analysis and revision tool for interview preparation. Paste a 
 ## What it does
 
 - Analyzes Java, Python, and C++ source code with in-process TypeScript parsers (java-parser for Java, web-tree-sitter WASM for Python, enhanced normalization for C++); JVM CLI kept as an opt-in cross-check for Java
-- **Try a sample**: nine curated problems (binary search, two sum, merge sort, BFS islands, valid parentheses in Java and Python, plus C++ equivalents) with rich tagged comments — one click loads and analyzes, deep-linkable via `/analyze?sample=two-sum`
+- **Try a sample**: twelve curated problems (binary search, two sum, merge sort, BFS graph, valid parentheses in Java and Python, plus C++ equivalents including a hello-world intro) with rich tagged comments — one click loads and analyzes, deep-linkable via `/analyze?sample=two-sum`
 - **LeetCode URL import**: paste a `leetcode.com/problems/…` link and the metadata bar auto-fills the name, difficulty and topic tags (unofficial GraphQL, host-allowlisted SSRF guard, graceful fallback to manual entry)
 - **Multi-user with GitHub sign-in** (Auth.js v5): each account gets a private problem log, quiz deck, and notes — enforced at every API route, not just hidden in the UI
 - Saves problems to **Turso** (libSQL) in the cloud, or a local SQLite file in dev — same schema, same code path
 - Renders **multi-color flowcharts** — loops, decisions, calls, recursion, and returns each get their own color, with actual code (conditions, statements, call args) in the node labels and a built-in color legend. Diagrams open in a **pan/zoom viewer**: drag to pan, scroll or pinch to zoom, Fit/100% buttons, native size by default — plus hover tooltips with full node text, hover glow, and a bidirectional cursor↔flowchart highlight (move the editor caret and the matching node pulses)
 - **Blocks walkthrough**: the method as readable per-section block cards — one card per statement with type badges, loop-bound hints, recursion flags, nested indentation, and jump-to-line — for understanding the structure without reading the graph
 - Shows your **tagged comments inside the flowchart** as note nodes attached to the code they annotate (`// q:`, `// note:`, `// why:`, `// complexity:` — standalone or trailing after code)
-- **Run console**: execute your code with real console input — type stdin (what your `Scanner` / `BufferedReader` reads for Java, `cin` for C++), hit Run (or Ctrl+Enter), and see stdout/stderr, exit code and timing. Compiles and runs in an isolated temp directory with hard timeouts, output caps, JVM heap limits (Java) or memory limits (C++), rate limiting and a concurrency guard. **Local-only feature** — gated behind `NEXT_PUBLIC_ENABLE_RUN=1` because serverless hosts have no JVM/C++ compiler; the endpoint itself returns 501 on deployments built without the flag
+- **Run console**: execute your code with real console input — type stdin (what your `Scanner` / `BufferedReader` reads for Java, `cin` for C++ and C), hit Run (or Ctrl+Enter), and see stdout/stderr, exit code and timing. Compiles and runs in an isolated temp directory with hard timeouts, output caps, JVM heap limits (Java) or memory limits (C++/C), rate limiting and a concurrency guard. **Local-only feature** — gated behind `NEXT_PUBLIC_ENABLE_RUN=1` because serverless hosts have no JVM/compiler; the endpoint itself returns 501 on deployments built without the flag
 - Estimates time/space complexity with confidence scores and reasoning — detects nested loops, linear/halving/branching recursion (log n, n log n, 2^n), iterative binary search, sorting calls, and auxiliary allocations
 - **Self-check mode**: guess both time **and** space complexity before revealing the estimates, with per-dimension right/wrong scoring
 - **Call graph** for multi-method problems (e.g. DFS with a helper): internal methods and library calls as a navigable graph with per-node complexity badges (`O(n log n)` etc.) and signature/complexity tooltips — click a method to jump to its flowchart
@@ -44,7 +44,7 @@ CodeLens is a DSA analysis and revision tool for interview preparation. Paste a 
 - Node.js 18+
 - npm
 - Java JDK 17+ on `PATH` — only for the opt-in run console and JVM parser cross-check, not for analysis
-- g++ (C++17) on `PATH` — only for the opt-in run console (C++), not for analysis
+- g++ (C++17) on `PATH` — only for the opt-in run console (C++ and C), not for analysis
 - The JavaParser 3.26.2 jar in your local Maven cache (`~/.m2/repository/com/github/javaparser/javaparser-core/3.26.2/`) or pointed to via `JAVAPARSER_JAR` — only for the JVM cross-check
 
 ## Environment variables
@@ -72,7 +72,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:3000, paste Java code, and click Analyze.
+Then open http://localhost:3000, paste Java, Python, C++ or C code, and click Analyze.
 
 ## Useful scripts
 
@@ -99,13 +99,14 @@ app/                  Next.js routes and pages
   api/quiz/           quiz cards + spaced-repetition review (owner-scoped)
   api/quiz/cards/     accept reviewed AI-drafted cards (owner-scoped, source='ai')
   api/notes/          quiz answer editing (owner-scoped)
-  api/run/            compile + execute Java with stdin input (auth + feature-flag gated)
+  api/run/            compile + execute Java/C++/C with stdin input (auth + feature-flag gated)
   p/[slug]/           public read-only shared-analysis page (capability URL)
   analyze/            editor + analysis UI
   diff/               brute-force vs optimized comparison page
   log/                problem log page with filters, exports, share management
   progress/           progress dashboard page
   quiz/               spaced-repetition quiz page
+  interview/          timed mock interview sessions
 components/           UI panels (editor chrome, flowchart, call graph, complexity, notes, sample picker, sign-in prompts)
 data/                 curated sample problems for the Try-a-sample picker
 lib/
@@ -174,11 +175,13 @@ Java parsing runs **in-process in TypeScript** via [java-parser](https://www.npm
 
 **C++ support (v0.6):** C++ parses via an enhanced normalization pipeline (`lib/parser/cpp.ts`) that transforms C++ source into Java-like syntax for the java-parser engine — preprocessor stripping, `std::` removal, type mapping (vector→ArrayList, map→HashMap), and C++-specific syntax handling. No native builds or WASM required; works on serverless. Tagged comments use `// q:`, `// note:`, `// why:`, `// complexity:` (same as Java). The Run console uses g++ for compilation.
 
-`POST /api/analyze` accepts `"language": "java" | "python" | "cpp"` (Java is the default); the whole downstream pipeline (complexity, flowchart, call graph, notes, diff, exports, AI quiz prompts) is language-agnostic over the shared IR. A cross-language golden test suite asserts the same algorithm in all three languages yields identical complexity verdicts.
+**C support:** C uses the same C++ normalization pipeline and g++ compiler — select `"language": "c"` in the editor or API and the code is parsed as C++ (most C code compiles cleanly). Space complexity analysis detects C++ STL containers in declarations (`unordered_map`, `vector`, etc.) for accurate auxiliary-space estimates.
+
+`POST /api/analyze` accepts `"language": "java" | "python" | "cpp" | "c"` (Java is the default); C is parsed and executed via the same C++ pipeline since g++ compiles both. The whole downstream pipeline (complexity, flowchart, call graph, notes, diff, exports, AI quiz prompts) is language-agnostic over the shared IR. A cross-language golden test suite asserts the same algorithm in all three languages yields identical complexity verdicts.
 
 ---
 
-v0.3 and v0.4 are shipped (share links, weak-topic drills, mistake journal). v0.5 Python support is shipped. v0.6 C++ support is shipped. Remaining v0.4 backlog: GitHub journal sync, weekly email digest. See `docs/ROADMAP.md` (local) for the full plan.
+v0.4 ships with skeleton loading states, interview mode, diff mode, and C language support. See `docs/ROADMAP.md` (local) for the full plan.
 
 ---
 Made by Manab.

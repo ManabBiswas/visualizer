@@ -8,33 +8,48 @@ const APP_VERSION = "0.4.0";
 const FEATURES = [
   {
     title: "Flowcharts",
-    body: "Every method becomes an interactive flowchart. Hover a node to jump straight to that line in the editor.",
+    body: "Every method becomes an interactive multi-color flowchart. Hover a node to jump to that line — pan, zoom, and export as PNG or SVG.",
     accent: "text-primary",
   },
   {
     title: "Complexity analysis",
-    body: "Time and space Big-O with confidence scores, plus a per-block breakdown of loops, recursion and conditionals.",
+    body: "Time and space Big-O with confidence scores, plus a per-block breakdown of loops, recursion and conditionals. Self-check mode lets you guess first.",
     accent: "text-complexity-badge",
   },
   {
     title: "Call graphs",
-    body: "Multi-method solutions get a class-level call graph so you can see how helpers feed into the main approach.",
+    body: "Multi-method solutions get a class-level call graph so you can see how helpers feed into the main approach — with complexity badges per node.",
     accent: "text-why-badge",
   },
   {
     title: "Notes that quiz you",
-    body: "Tag comments with // q:, // note:, // why: and they become spaced-repetition flashcards automatically.",
+    body: "Tag comments with // q:, // note:, // why: and they become spaced-repetition flashcards automatically — with a mistake journal for what you keep missing.",
     accent: "text-note-badge",
   },
   {
     title: "Run console",
-    body: "Execute your Java right in the browser tab with custom stdin — verify the edge case before you move on.",
+    body: "Execute Java, C++, or C right in the browser with custom stdin — verify the edge case before you move on.",
     accent: "text-success",
+  },
+  {
+    title: "Diff mode",
+    body: "Paste your brute-force and optimized solutions side by side — get a color-coded complexity delta with reasoning for both.",
+    accent: "text-warning",
+  },
+  {
+    title: "Interview mode",
+    body: "Timed mock interview sessions with MCQ and free-answer cards — score yourself and review answers afterwards.",
+    accent: "text-primary",
+  },
+  {
+    title: "Progress dashboard",
+    body: "Due-today count, per-topic mastery, 30-day activity heatmap and a day streak — see your revision loop at a glance.",
+    accent: "text-tertiary",
   },
   {
     title: "PDF reports",
     body: "Export a clean light-theme report with code, complexity, blocks and flowchart for offline revision.",
-    accent: "text-tertiary",
+    accent: "text-complexity-badge",
   },
 ];
 
@@ -42,7 +57,7 @@ const STEPS = [
   {
     step: "01",
     title: "Paste your solution",
-    body: "Drop in any Java solution — from LeetCode, a contest, or your own practice set. Add the problem name and tags if you want it logged.",
+    body: "Drop in Java, Python, C or C++ code — from LeetCode, a contest, or your own practice set. Import from a LeetCode URL or pick a curated sample.",
   },
   {
     step: "02",
@@ -52,7 +67,7 @@ const STEPS = [
   {
     step: "03",
     title: "Revise later",
-    body: "Everything lands in your log. Quiz cards surface from your // q: comments and schedule themselves by recall.",
+    body: "Everything lands in your log. Quiz cards surface from your // q: comments and schedule themselves by recall — or drill them in interview mode.",
   },
 ];
 
@@ -78,16 +93,16 @@ export default function LandingPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col px-container-margin pb-16">
         <section className="flex flex-col items-start gap-5 pb-14 pt-16">
           <span className="label-caps rounded-full border border-panel-border bg-surface-container-low px-3 py-1">
-            Java · DSA · Placement prep
+            Java · Python · C++ · C · DSA · Placement prep
           </span>
           <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight text-text-high-contrast">
             Understand your solutions{" "}
             <span className="text-primary">before the interviewer asks.</span>
           </h1>
           <p className="max-w-xl text-body-md text-on-surface-variant">
-            CodeLens turns Java solutions into flowcharts, call graphs and Big-O
-            analysis — then converts your own comments into a spaced-repetition
-            quiz so the reasoning actually sticks.
+            CodeLens turns Java, Python, C++ and C solutions into flowcharts,
+            call graphs and Big-O analysis — then converts your own comments
+            into a spaced-repetition quiz so the reasoning actually sticks.
           </p>
           <div className="flex items-center gap-3">
             <Link
@@ -130,7 +145,7 @@ export default function LandingPage() {
           <div className="panel overflow-hidden rounded-lg">
             <div className="flex items-center gap-2 border-b border-panel-border bg-surface-container-lowest px-3 py-1.5">
               <span className="label-caps">Solution.java</span>
-              <span className="font-mono text-code-sm text-text-muted">tagged comments become notes</span>
+              <span className="font-mono text-code-sm text-text-muted">tagged comments become notes · also Python, C++, C</span>
             </div>
             <pre className="overflow-x-auto bg-editor-bg p-4 font-mono text-code-md leading-relaxed text-on-surface">
               {SAMPLE}
@@ -145,7 +160,7 @@ export default function LandingPage() {
               Paste it in, get the breakdown, and let the quiz handle the rest.
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/quiz"
               className="rounded border border-panel-border px-4 py-2 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
@@ -157,6 +172,12 @@ export default function LandingPage() {
               className="rounded border border-panel-border px-4 py-2 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
             >
               Diff
+            </Link>
+            <Link
+              href="/interview"
+              className="rounded border border-panel-border px-4 py-2 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            >
+              Interview
             </Link>
             <Link
               href="/analyze"
@@ -173,7 +194,8 @@ export default function LandingPage() {
           <div className="flex flex-col gap-1.5">
             <span className="font-mono text-code-md font-semibold text-text-high-contrast">CodeLens</span>
             <p className="max-w-xs text-body-sm text-text-muted">
-              Flowcharts, Big-O and spaced-repetition revision for your Java DSA prep.
+              Flowcharts, Big-O and spaced-repetition revision for your Java,
+              Python, C++ and C DSA prep.
             </p>
           </div>
           <div className="flex gap-12">
@@ -184,6 +206,9 @@ export default function LandingPage() {
               </Link>
               <Link href="/diff" className="text-body-sm text-on-surface-variant hover:text-primary">
                 Diff
+              </Link>
+              <Link href="/interview" className="text-body-sm text-on-surface-variant hover:text-primary">
+                Interview
               </Link>
             </div>
             <div className="flex flex-col gap-2">
@@ -203,7 +228,7 @@ export default function LandingPage() {
         <div className="">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-container-margin py-3">
             <span className="font-mono text-code-sm text-text-muted">
-              Java parsing · Mermaid diagrams · Monaco editor
+              Java · Python · C++ · C parsing · Mermaid diagrams · Monaco editor
             </span>
             <span className="font-mono text-code-sm text-text-muted">v{APP_VERSION}</span>
           </div>

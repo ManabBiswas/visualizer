@@ -152,7 +152,7 @@ function EditorPage() {
       if (!editorContainerRef.current) return;
       const containerRect = editorContainerRef.current.getBoundingClientRect();
       const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-      
+
       // Constrain to 20% - 80% for better UX
       if (newWidth > 20 && newWidth < 80) {
         setSplitRatio(newWidth);
@@ -170,6 +170,11 @@ function EditorPage() {
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      // Defensive reset: if the effect tears down while the user is mid-drag
+      // (component unmount, route change, Fast Refresh) the inline body styles
+      // would otherwise stick until the next mouseup.
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
   }, [isResizing]);
 
@@ -361,7 +366,7 @@ function EditorPage() {
     <div className="flex h-full min-h-0 flex-col">
       <MetadataBar meta={meta} onChange={setMeta} />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden" ref={editorContainerRef}>
 {/* Editor pane */}
         <div className="flex h-full min-w-0 flex-col" style={{ width: `${splitRatio}%` }}>
           <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-2 flex-wrap gap-2">
@@ -479,7 +484,7 @@ function EditorPage() {
         </div>
         {/* Resize Handle */}
         <div
-          className="w-4 cursor-col-resize bg-panel-border hover:bg-primary transition-colors z-10"
+          className="w-1 cursor-col-resize bg-panel-border hover:bg-primary transition-colors z-10"
           onMouseDown={() => {
             setIsResizing(true);
             document.body.style.cursor = "col-resize";
