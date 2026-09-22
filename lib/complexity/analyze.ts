@@ -52,8 +52,10 @@ const HALVING_ASSIGNMENT = /=\s*[^;=]*(\/\s*2|>>\s*1)/;
 // "auxiliary structure proportional to input" for space analysis. The
 // Java alternative also covers fully-qualified forms like
 // `new java.util.HashMap<>()`.
+// C++ standard library containers (vector, map, unordered_map, set, etc.)
+// also indicate auxiliary space proportional to input when declared.
 const AUX_ALLOCATION =
-  /new\s+(?:[\w.]+\s*\.\s*)?(?:\w+\s*\[|(ArrayList|LinkedList|HashMap|HashSet|TreeMap|TreeSet|ArrayDeque|PriorityQueue|StringBuilder|StringBuffer|HashMap)\b)|\blist\s*\(|\bdict\s*\(|\bset\s*\(|\bdeque\s*\(|\[\s*\]|\{\s*\}|set\s*\(\s*\)/;
+  /new\s+(?:[\w.]+\s*\.\s*)?(?:\w+\s*\[|(ArrayList|LinkedList|HashMap|HashSet|TreeMap|TreeSet|ArrayDeque|PriorityQueue|StringBuilder|StringBuffer|HashMap)\b)|\blist\s*\(|\bdict\s*\(|\bset\s*\(|\bdeque\s*\(|\[\s*\]|\{\s*\}|set\s*\(\s*\)|\b(vector|unordered_map|unordered_set|map|set|deque|list|queue|stack|priority_queue)\s*<[^>]+>\s*\w+|\[\s*\]|\{\s*\}|set\s*\(\s*\)/;
 
 function maxLoopDepth(body: StatementNode[]): { depth: number; worstBound: LoopBoundType; ambiguousLines: number[] } {
   let depth = 0;

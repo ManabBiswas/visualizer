@@ -28,13 +28,13 @@ export function ScreenSizeWarning() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-container-lowest p-4"
+      className="fixed inset-0 z-100 flex items-center justify-center bg-surface-container-lowest p-4"
       role="alert"
       aria-live="assertive"
     >
       <div className="max-w-sm w-full bg-surface-container-low border border-panel-border rounded-xl p-6 shadow-xl">
         <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 text-warning">
+          <div className="shrink-0 text-warning">
             <svg
               className="h-6 w-6"
               fill="none"
