@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { InterviewSkeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
 type QuizCard = {
@@ -238,11 +239,7 @@ export default function InterviewClient() {
   const { correct, total } = getScore();
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-body-sm text-text-muted">Loading interview session…</div>
-      </div>
-    );
+    return <InterviewSkeleton />;
   }
 
   if (error) {

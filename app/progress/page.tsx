@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { ProgressSkeleton } from "@/components/Skeleton";
 import { useCountUp } from "@/lib/useCountUp";
 import type { ProgressStats } from "@/lib/progress/stats";
 
@@ -67,7 +68,7 @@ export default function ProgressPage() {
   }, [status]);
 
   if (status === "loading" || (status === "authenticated" && loading)) {
-    return <div className="p-panel-padding text-body-sm text-text-muted">Loading progress…</div>;
+    return <ProgressSkeleton />;
   }
 
   if (status !== "authenticated") {

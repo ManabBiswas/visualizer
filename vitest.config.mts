@@ -13,9 +13,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
-      "next/server": path.resolve(__dirname, "node_modules/next/server.js"),
-      "next/headers": path.resolve(__dirname, "node_modules/next/headers.js"),
+      "@": path.resolve(import.meta.dirname, "."),
+      "next/server": path.resolve(import.meta.dirname, "node_modules/next/server.js"),
+      "next/headers": path.resolve(import.meta.dirname, "node_modules/next/headers.js"),
     },
   },
 });

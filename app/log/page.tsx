@@ -9,6 +9,7 @@ import { logToMarkdown, logToCsv, LogExportRow } from "@/lib/export/log";
 import { downloadText } from "@/lib/export/download";
 import { isSafeHttpUrl, parseJsonArray } from "@/lib/security/validate";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { LogSkeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
 type ProblemRow = {
@@ -205,7 +206,7 @@ export default function LogPage() {
           callbackUrl="/log"
         />
       ) : loading ? (
-        <p className="text-body-sm text-text-muted">Loading…</p>
+        <LogSkeleton />
       ) : problems.length === 0 ? (
         <div className="flex flex-1 items-center justify-center text-body-sm text-text-muted">
           Solve your first problem to start building your revision log.

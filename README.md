@@ -1,6 +1,6 @@
 # CodeLens
 
-CodeLens is a DSA analysis and revision tool for interview preparation. Paste a Java, Python, or C++ solution, inspect its structure as a color-coded flowchart, get complexity estimates with plain-English reasoning, extract revision notes from your own comments, and build a searchable log of solved problems — privately, under your own account.
+CodeLens is a DSA analysis and revision tool for interview preparation. Paste a Java, Python, C, or C++ solution, inspect its structure as a color-coded flowchart, get complexity estimates with plain-English reasoning, extract revision notes from your own comments, and build a searchable log of solved problems — privately, under your own account.
 
 ## What it does
 
@@ -61,6 +61,7 @@ Copy `.env.example` to `.env.local` (dev) or set them in your host's dashboard (
 | `CODELENS_PARSER` | no | `java` to use the JVM parser CLI as a cross-check (default: in-process TS parser) |
 | `JAVAPARSER_JAR` | no | Path to the JavaParser jar if not in the default `~/.m2` location |
 | `ALLOW_LOCAL_AI_BASE_URL` | no | Set to `1` to allow `http://localhost` custom AI provider endpoints — dev machines only |
+| `REDIS_URL` | prod (multi-instance) | Redis connection URL for distributed rate limiting. **Without it, rate limits are per-process only** — each Vercel/serverless instance gets its own budget, so a determined client can multiply their effective limit by the number of instances. Set this in production for accurate global rate limiting |
 
 **GitHub OAuth app**: create one at <https://github.com/settings/developers> (or a GitHub App) with callback URL `https://YOUR_DOMAIN/api/auth/callback/github` (plus `http://localhost:3000/api/auth/callback/github` for dev). The app must request **read-only** access to public data — CodeLens only needs the user's id, login, name, and avatar.
 
@@ -159,7 +160,7 @@ Input is treated as hostile by default (`lib/security/`):
 - **Secrets**: required env vars are asserted at boot; subprocesses (JVM parser / run console) inherit only an allowlisted env (PATH, HOME, JAVA_HOME — never tokens or secrets); error messages shown to clients are redacted against the secret registry
 - **Multi-tenant**: every query is scoped by the authenticated user's id; foreign resources are indistinguishable from missing ones (404), and anonymous requests get 401 before any DB work
 - **Parser abuse**: source is capped at 200k chars (2MB on the Java side), the JVM subprocess runs with a 15s kill timeout and an 8MB output cap, at most 4 parsers run concurrently, and pathological input (e.g. extreme nesting) is converted into a clean error instead of a JVM crash
-- **Abuse**: `/api/analyze` is rate-limited per IP (30/min), `/api/leetcode` at 10/min with an 8s upstream timeout, `/api/run` at 20/min, and the AI drafting endpoint at 5/min; malformed JSON, oversized payloads, and invalid metadata get 400s before any work happens
+- **Abuse**: `/api/analyze` is rate-limited per IP (30/min), `/api/leetcode` at 10/min with an 8s upstream timeout, `/api/run` at 20/min, and the AI drafting endpoint at 5/min; malformed JSON, oversized payloads, and invalid metadata get 400s before any work happens. Rate limiting uses Redis when `REDIS_URL` is set (accurate across serverless instances) and falls back to in-memory per-process buckets otherwise — **set `REDIS_URL` in production** to prevent limit multiplication across instances
 - **BYO-key AI drafting**: provider endpoints are hardcoded (openai/gemini/anthropic only — no user-supplied URLs, so no SSRF), keys are shape-validated and request-scoped, model output is strictly parsed and sanitized (length caps, control-char stripping, per-card validation), and error paths never echo keys back. Drafts are not persisted — accepted cards pass a separate human-approval endpoint that records `source='ai'` provenance
 - **Share links**: slugs are 12-char crypto-random base62 (~71 bits) stored with a partial unique index; the public page validates slug shape before SQL, leaks no user identity, is `noindex`, and revocation nulls the slug so the page 404s immediately — no public listing exists, so a slug is a pure capability URL
 - **Headers**: the proxy sets a strict Content-Security-Policy, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cross-Origin-Opener-Policy`

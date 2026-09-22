@@ -8,6 +8,7 @@ import { Grade } from "@/lib/spaced/repetition";
 import { cardsToAnkiTxt } from "@/lib/export/anki";
 import { downloadText } from "@/lib/export/download";
 import { SignInPrompt } from "@/components/SignInPrompt";
+import { QuizSkeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
 type QuizCard = {
@@ -311,7 +312,7 @@ function QuizPage() {
           callbackUrl={problemFilter ? `/quiz?problem=${problemFilter}` : "/quiz"}
         />
       ) : loading ? (
-        <p className="text-body-sm text-text-muted">Loading…</p>
+        <QuizSkeleton />
       ) : !current ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-body-sm text-text-muted">
           <p>No quiz cards in this view.</p>

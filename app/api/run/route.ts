@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = language === "cpp"
+    const result = language === "cpp" || language === "c"
       ? await runCpp(sourceCheck.value, stdinCheck.value)
       : await runJava(sourceCheck.value, stdinCheck.value);
     // Setup failures (no main method) are user errors; everything else is a
