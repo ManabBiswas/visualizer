@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 const MOBILE_BREAKPOINT = 768; // Tailwind `md:` breakpoint
 
@@ -8,8 +8,12 @@ export function ScreenSizeWarning() {
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
     const checkScreenSize = () => {
       setIsSmallScreen(window.innerWidth < MOBILE_BREAKPOINT);
     };

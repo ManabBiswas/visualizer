@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, useCallback, KeyboardEvent } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -225,45 +225,9 @@ function EditorPage() {
     setActiveLine(line);
   }
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case "Enter":
-            e.preventDefault();
-            if (!loading) void analyze();
-            break;
-          case "s":
-            e.preventDefault();
-            if (current && !reporting) void downloadReport();
-            break;
-          case "1":
-          case "2":
-          case "3":
-          case "4":
-          case "5": {
-            const tabs: RightTab[] = ["flowchart", "blocks", "callgraph", "complexity", "notes"];
-            const idx = parseInt(e.key, 10) - 1;
-            if (tabs[idx]) {
-              e.preventDefault();
-              setTab(tabs[idx]);
-            }
-            break;
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown as EventListener);
-    return () => window.removeEventListener("keydown", handleKeyDown as EventListener);
-  }, [loading, reporting]);
+  const current = results[activeMethod];
 
-  // Takes meta explicitly: loadSample() calls this in the same tick as
-  // setMeta(), so reading the `meta` state here would see the PREVIOUS
-  // problem's meta and upsert the sample under the old name — destroying the
-  // old problem's analyses/notes (the server upserts by name).
-  // Same for language: languageOverride flows from loadSample.
-  async function analyze(source: string = code, metaOverride?: ProblemMeta, languageOverride?: Language) {
+  const analyze = useCallback(async (source: string = code, metaOverride?: ProblemMeta, languageOverride?: Language) => {
     const effectiveMeta = metaOverride ?? meta;
     const effectiveLanguage = languageOverride ?? language;
     setLoading(true);
@@ -310,34 +274,10 @@ function EditorPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [code, meta, language]);
 
-  /** Load one of the curated samples: fill editor + meta, then analyze it. */
-  function loadSample(sample: Sample) {
-    const sampleMeta: ProblemMeta = {
-      name: sample.name,
-      link: sample.link,
-      topicTags: [...sample.topicTags],
-      difficulty: sample.difficulty,
-    };
-    const sampleLanguage: Language = sample.language === "python" ? "python" : sample.language === "cpp" ? "cpp" : sample.language === "c" ? "c" : "java";
-    setCode(sample.source);
-    setLanguage(sampleLanguage);
-    setMeta(sampleMeta);
-    setResults([]);
-    setCallGraph(null);
-    setCallGraphLight(null);
-    setCallGraphTooltips(null);
-    setSavedProblemId(null);
-    setSaveWarning(null);
-    setError(null);
-    setSampleOpen(false);
-    void analyze(sample.source, sampleMeta, sampleLanguage);
-  }
-
-  const current = results[activeMethod];
-
-  async function downloadReport() {
+  const downloadReport = useCallback(async () => {
+    const current = results[activeMethod];
     if (!current) return;
     setReporting(true);
     try {
@@ -359,6 +299,62 @@ function EditorPage() {
     } finally {
       setReporting(false);
     }
+  }, [results, activeMethod, meta, code]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case "Enter":
+            e.preventDefault();
+            if (!loading) void analyze();
+            break;
+          case "s":
+            e.preventDefault();
+            if (!reporting) void downloadReport();
+            break;
+          case "1":
+          case "2":
+          case "3":
+          case "4":
+          case "5": {
+            const tabs: RightTab[] = ["flowchart", "blocks", "callgraph", "complexity", "notes"];
+            const idx = parseInt(e.key, 10) - 1;
+            if (tabs[idx]) {
+              e.preventDefault();
+              setTab(tabs[idx]);
+            }
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [loading, reporting, analyze, downloadReport]);
+
+  /** Load one of the curated samples: fill editor + meta, then analyze it. */
+  function loadSample(sample: Sample) {
+    const sampleMeta: ProblemMeta = {
+      name: sample.name,
+      link: sample.link,
+      topicTags: [...sample.topicTags],
+      difficulty: sample.difficulty,
+    };
+    const sampleLanguage: Language = sample.language === "python" ? "python" : sample.language === "cpp" ? "cpp" : "java";
+    setCode(sample.source);
+    setLanguage(sampleLanguage);
+    setMeta(sampleMeta);
+    setResults([]);
+    setCallGraph(null);
+    setCallGraphLight(null);
+    setCallGraphTooltips(null);
+    setSavedProblemId(null);
+    setSaveWarning(null);
+    setError(null);
+    setSampleOpen(false);
+    void analyze(sample.source, sampleMeta, sampleLanguage);
   }
 
   return (
@@ -366,8 +362,8 @@ function EditorPage() {
       <MetadataBar meta={meta} onChange={setMeta} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Editor pane */}
-        <div className="flex h-full min-w-0 flex-col border-r border-panel-border" style={{ width: `${splitRatio}%` }}>
+{/* Editor pane */}
+        <div className="flex h-full min-w-0 flex-col" style={{ width: `${splitRatio}%` }}>
           <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-3 py-2 flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="label-caps">Editor</span>
@@ -483,7 +479,7 @@ function EditorPage() {
         </div>
         {/* Resize Handle */}
         <div
-          className="w-1 cursor-col-resize bg-panel-border hover:bg-primary transition-colors z-10"
+          className="w-4 cursor-col-resize bg-panel-border hover:bg-primary transition-colors z-10"
           onMouseDown={() => {
             setIsResizing(true);
             document.body.style.cursor = "col-resize";
