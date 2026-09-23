@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useTheme } from "@/lib/theme";
+import { StreakCounter } from "@/components/StreakCounter";
 
 const links = [
   { href: "/", label: "Home" },
@@ -62,6 +63,7 @@ export function TopNav() {
         Star the repo
       </a>
       <div className="ml-2 flex items-center gap-1.5">
+        <StreakCounter />
         {status === "loading" ? (
           <span className="text-body-sm text-text-muted">…</span>
         ) : session?.user ? (

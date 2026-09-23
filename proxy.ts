@@ -11,7 +11,7 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval' https://cdn.jsdelivr.net"}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://avatars.githubusercontent.com",
   "font-src 'self' data:",
   `connect-src 'self'${isProd ? "" : " https://cdn.jsdelivr.net"}`,
   "worker-src 'self' blob:",

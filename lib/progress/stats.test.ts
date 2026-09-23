@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeProgressStats,
+  computeStreak,
   type ProgressCardRow,
   type ProgressProblemRow,
 } from "./stats";
@@ -181,5 +182,30 @@ describe("computeProgressStats — streak", () => {
       NOW,
     );
     expect(stats.totals.streak).toBe(2);
+  });
+});
+
+describe("computeStreak", () => {
+  function localDayKey(offsetDays: number): string {
+    const d = new Date(NOW - offsetDays * DAY);
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  it("counts consecutive days ending today", () => {
+    expect(computeStreak(new Set([localDayKey(0), localDayKey(1), localDayKey(2)]), NOW)).toBe(3);
+  });
+
+  it("keeps the streak when today is idle but yesterday was active", () => {
+    expect(computeStreak(new Set([localDayKey(1), localDayKey(2)]), NOW)).toBe(2);
+  });
+
+  it("breaks after a gap", () => {
+    expect(computeStreak(new Set([localDayKey(1), localDayKey(3)]), NOW)).toBe(1);
+  });
+
+  it("returns 0 for an empty set", () => {
+    expect(computeStreak(new Set(), NOW)).toBe(0);
   });
 });

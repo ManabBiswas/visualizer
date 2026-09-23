@@ -82,6 +82,23 @@ function startOfDay(ts: number): number {
 }
 
 /**
+ * Consecutive days (ending today or yesterday) on which `activeDayKeys`
+ * contains the local day key. Shared by the full dashboard stats and the
+ * lightweight /api/progress/streak endpoint.
+ */
+export function computeStreak(activeDayKeys: Set<string>, now: number = Date.now()): number {
+  const today = startOfDay(now);
+  let streak = 0;
+  let cursor = today;
+  if (!activeDayKeys.has(dayKey(cursor))) cursor -= DAY_MS; // allow "yesterday" streaks
+  while (activeDayKeys.has(dayKey(cursor))) {
+    streak += 1;
+    cursor -= DAY_MS;
+  }
+  return streak;
+}
+
+/**
  * Computes all dashboard stats. `now` defaults to the wall clock but is
  * injectable for deterministic tests. Timezone is the server's local one.
  */
@@ -152,17 +169,10 @@ export function computeProgressStats(
 
   // Streak: consecutive days with problems>0 or reviews>0, counting today
   // (or yesterday, so an idle today doesn't zero the streak immediately).
-  const active = (key: string) => {
-    const e = heat.get(key);
-    return !!e && (e.problems > 0 || e.reviews > 0);
-  };
-  let streak = 0;
-  let cursor = today;
-  if (!active(dayKey(cursor))) cursor -= DAY_MS; // allow "yesterday" streaks
-  while (active(dayKey(cursor))) {
-    streak += 1;
-    cursor -= DAY_MS;
-  }
+  const activeDayKeys = new Set(
+    [...heat.entries()].filter(([, e]) => e.problems > 0 || e.reviews > 0).map(([k]) => k),
+  );
+  const streak = computeStreak(activeDayKeys, now);
 
   return {
     totals: {
