@@ -4,11 +4,15 @@ import { assertRequiredEnv } from "@/lib/security/env";
 
 assertRequiredEnv();
 
+// trustHost: pass `true`/`false` only when AUTH_TRUST_HOST is explicitly set;
+// leave it `undefined` otherwise so Auth.js's setEnvDefaults can apply its own
+// fallback (`AUTH_URL ?? AUTH_TRUST_HOST ?? VERCEL ?? dev`) — passing an
+// explicit `false` short-circuits that and makes every /api/auth/* call
+// throw UntrustedHost on Vercel. Self-hosted prod without AUTH_TRUST_HOST
+// still defaults to untrusted (set AUTH_TRUST_HOST=true for custom domains).
 const AUTH_TRUST_HOST = process.env.AUTH_TRUST_HOST
   ? process.env.AUTH_TRUST_HOST === "true"
-  : process.env.NODE_ENV === "production"
-    ? false
-    : true;
+  : undefined;
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -21,17 +25,13 @@ function asGitHubProfile(profile: unknown): GitHubProfile | null {
   return p;
 }
 
-// Stateless JWT sessions: no session tables, ideal for serverless + Turso.
-// The `users` row is upserted lazily by getOrCreateUser() when data is saved,
-// keyed on the immutable GitHub id — never the login, which can be renamed.
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [GitHub],
-  session: { strategy: "jwt" },
-  // Auth.js v5 only auto-trusts *.vercel.app; localhost and custom domains
-  // need explicit trustHost or every /api/auth/* call 500s with UntrustedHost.
-  // In production, set AUTH_TRUST_HOST to your domain (e.g., "yourdomain.com").
-  // Defaults to "localhost" in dev, false in production (Vercel auto-trusts *.vercel.app).
-  trustHost: AUTH_TRUST_HOST,
+  // Stateless JWT sessions: no session tables, ideal for serverless + Turso.
+  // The `users` row is upserted lazily by getOrCreateUser() when data is saved,
+  // keyed on the immutable GitHub id — never the login, which can be renamed.
+  export const { handlers, auth, signIn, signOut } = NextAuth({
+    providers: [GitHub],
+    session: { strategy: "jwt" },
+    trustHost: AUTH_TRUST_HOST,
   // Secure cookie settings
   cookies: {
     sessionToken: {
