@@ -214,27 +214,45 @@ export function LogSkeleton() {
 /** Card-shaped skeleton for the interview session. */
 export function InterviewSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6" aria-label="Loading interview…" role="status">
-      <div className="flex items-center gap-2">
-        <div className="skeleton h-6 w-28 rounded" />
-        <div className="skeleton h-6 w-20 rounded" />
-        <div className="ml-auto skeleton h-6 w-24 rounded" />
+    <div className="flex h-full flex-col" aria-label="Loading interview…" role="status">
+      {/* Header bar matching InterviewClient layout */}
+      <div className="flex shrink-0 items-center justify-between border-b border-panel-border bg-surface-container-lowest px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="skeleton h-4 w-12 rounded" />
+          <div className="skeleton h-4 w-24 rounded" />
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="skeleton h-5 w-14 rounded" />
+          <div className="skeleton h-4 w-20 rounded" />
+        </div>
       </div>
-      <div className="rounded-lg border border-panel-border bg-surface-container p-6">
-        <SkeletonLine className="w-24 mb-4" />
-        <SkeletonLine className="w-full mb-2" />
-        <SkeletonLine className="w-4/5 mb-2" />
-        <SkeletonLine className="w-3/5" />
-      </div>
-      <div className="flex gap-3">
-        <div className="skeleton h-10 w-28 rounded" />
-        <div className="skeleton h-10 w-28 rounded" />
-        <div className="skeleton h-10 w-28 rounded" />
-        <div className="skeleton h-10 w-28 rounded" />
-      </div>
-      <div className="flex justify-between">
-        <div className="skeleton h-9 w-24 rounded" />
-        <div className="skeleton h-9 w-24 rounded" />
+      <div className="flex-1 overflow-auto p-6">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          <div className="flex gap-2">
+            <div className="skeleton h-6 w-28 rounded" />
+            <div className="skeleton h-6 w-20 rounded" />
+          </div>
+          <div className="rounded-lg border border-panel-border bg-surface-container p-6">
+            <SkeletonLine className="w-24 mb-4" />
+            <SkeletonLine className="w-full mb-2" />
+            <SkeletonLine className="w-4/5 mb-2" />
+            <SkeletonLine className="w-3/5" />
+            {/* Stacked full-width choice bars matching MCQ / textarea layouts */}
+            <div className="mt-6 space-y-3">
+              <div className="skeleton h-12 w-full rounded-lg" />
+              <div className="skeleton h-12 w-full rounded-lg" />
+              <div className="skeleton h-12 w-full rounded-lg" />
+              <div className="skeleton h-12 w-full rounded-lg" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <div className="skeleton h-9 w-28 rounded" />
+          </div>
+          <div className="flex justify-between">
+            <div className="skeleton h-9 w-24 rounded" />
+            <div className="skeleton h-9 w-24 rounded" />
+          </div>
+        </div>
       </div>
     </div>
   );

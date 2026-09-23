@@ -40,15 +40,6 @@ type InterviewCard = QuizCard & {
 const SESSION_DURATION = 20 * 60; // 20 minutes in seconds
 const MAX_CARDS = 10;
 
-function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
 function weightCards(cards: QuizCard[]): InterviewCard[] {
   // Weight by lapse_count (higher = more likely) and inverse ease_factor (lower = more likely)
   return cards.map((card) => ({
@@ -103,12 +94,14 @@ export default function InterviewClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cardStartTimeRef = useRef<number>(Date.now());
   const totalTimeSpentRef = useRef(0);
+  const loadSeqRef = useRef(0);
 
   // Load cards on mount
   async function loadCards() {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -116,23 +109,36 @@ export default function InterviewClient() {
       if (problemId) params.set("problem", problemId);
       if (topic) params.set("topic", topic);
 
-      const res = await fetch(`/api/quiz?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to load cards");
-      const data = await res.json();
+      const res = await fetch(`/api/quiz?${params.toString()}`, {
+        signal: AbortSignal.timeout(15_000),
+      });
+      const body: { cards?: QuizCard[]; warning?: string; error?: string } | null = await res
+        .json()
+        .catch(() => null);
+      if (seq !== loadSeqRef.current) return;
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+      if (body?.warning) {
+        setError(body.warning);
+        setLoading(false);
+        return;
+      }
 
-      if (!data.cards || data.cards.length === 0) {
+      const data = body?.cards ?? [];
+      if (data.length === 0) {
         setError("No quiz cards found. Add some notes with 'q:' tags or draft AI cards first.");
         setLoading(false);
         return;
       }
 
-      const weighted = weightCards(data.cards);
+      const weighted = weightCards(data);
       const selected = pickWeightedRandom(weighted, Math.min(MAX_CARDS, weighted.length));
+      if (seq !== loadSeqRef.current) return;
       setCards(selected);
     } catch (err) {
-      setError((err as Error).message);
+      if (seq !== loadSeqRef.current) return;
+      setError(err instanceof Error ? err.message : "Something went wrong loading cards.");
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }
 
@@ -145,21 +151,22 @@ export default function InterviewClient() {
   // Timer
   useEffect(() => {
     if (!sessionActive || sessionComplete) return;
-    
+
     timerRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          endSession();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeRemaining((prev) => Math.max(0, prev - 1));
     }, 1000);
-    
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [sessionActive, sessionComplete]);
+
+  // End session when time runs out (side effect outside the setState updater)
+  useEffect(() => {
+    if (sessionActive && !sessionComplete && timeRemaining === 0) {
+      endSession();
+    }
+  }, [timeRemaining, sessionActive, sessionComplete]);
 
   function startSession() {
     setSessionActive(true);
@@ -183,7 +190,7 @@ export default function InterviewClient() {
   function submitAnswer(userAnswer: string | number) {
     const card = cards[currentIndex];
     if (card.isRevealed || card.isCorrect !== null) return;
-    
+
     let isCorrect = false;
     if (card.choices !== undefined && card.correct_index !== undefined) {
       // MCQ
@@ -192,13 +199,17 @@ export default function InterviewClient() {
       // Open-ended: simple check if answer contains key terms (lenient)
       const userAns = (userAnswer as string).toLowerCase().trim();
       const correctAns = (card.answer || "").toLowerCase().trim();
-      // Consider correct if user answer shares significant words with correct answer
-      const correctWords = correctAns.split(/\s+/).filter((w) => w.length > 3);
-      const userWords = userAns.split(/\s+/).filter((w) => w.length > 3);
-      const matches = correctWords.filter((w) => userWords.some((uw) => uw.includes(w) || w.includes(uw)));
-      isCorrect = matches.length >= Math.min(2, correctWords.length);
+      if (!correctAns) {
+        // No reference answer — any non-empty attempt counts as correct (lenient fallback)
+        isCorrect = userAns.length > 0;
+      } else {
+        const correctWords = correctAns.split(/\s+/).filter((w) => w.length > 3);
+        const userWords = userAns.split(/\s+/).filter((w) => w.length > 3);
+        const matches = correctWords.filter((w) => userWords.some((uw) => uw.includes(w) || w.includes(uw)));
+        isCorrect = matches.length >= Math.min(2, Math.max(correctWords.length, 1));
+      }
     }
-    
+
     const timeSpent = Math.floor((Date.now() - cardStartTimeRef.current) / 1000);
     totalTimeSpentRef.current += timeSpent;
 
@@ -246,7 +257,7 @@ export default function InterviewClient() {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="text-center">
-          <div className="flex text-error mb-4">{error}</div>
+          <div className="flex text-error mb-4" role="alert">{error}</div>
           <Link href="/analyze" className="rounded bg-primary-container px-4 py-2 text-body-sm font-medium text-on-primary-container hover:opacity-90">
             Go analyze some code
           </Link>
@@ -259,7 +270,7 @@ export default function InterviewClient() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
         <div className="text-center max-w-md">
-          <div className="mb-4 text-headline-md text-on-surface">Interview Mode</div>
+          <h1 className="mb-4 text-headline-md text-on-surface">Interview Mode</h1>
           <p className="text-body-md text-on-surface-variant mb-6">
             Practice {MAX_CARDS} questions drawn from your deck, weighted toward topics you struggle with.
             Session runs for {SESSION_DURATION / 60} minutes. Hints are hidden until you attempt an answer.
@@ -298,12 +309,19 @@ export default function InterviewClient() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <div className={`font-mono text-code-lg tabular-nums ${
-            timeRemaining < 60 ? "text-error" : "text-on-surface"
-          }`}>
+          <div
+            role="timer"
+            aria-live="off"
+            className={`font-mono text-code-lg tabular-nums ${
+              timeRemaining < 60 ? "text-error" : "text-on-surface"
+            }`}
+          >
             {formatTime(timeRemaining)}
+            {timeRemaining < 60 && timeRemaining > 0 && (
+              <span className="sr-only"> — less than a minute remaining</span>
+            )}
           </div>
-          <div className="font-mono text-code-sm text-on-surface-variant">
+          <div className="font-mono text-code-sm text-on-surface-variant" aria-live="polite">
             Score: <span className="text-success">{correct}</span> / {total}
           </div>
         </div>
@@ -426,13 +444,15 @@ export default function InterviewClient() {
             <div className={`rounded-xl border p-6 ${
               currentCard.isRevealed ? "border-primary/30 bg-primary/5" : "border-panel-border bg-surface-container-lowest"
             }`}>
-              <h3 className="text-body-md text-on-surface mb-4">{currentCard.question}</h3>
+              <h2 className="text-body-md text-on-surface mb-4">{currentCard.question}</h2>
 
               {isMcq && currentCard.choices ? (
-                <div className="space-y-3">
+                <div className="space-y-3" role="radiogroup" aria-label="Answer choices">
                   {currentCard.choices.map((choice, ci) => (
                     <button
                       key={ci}
+                      role="radio"
+                      aria-checked={ci === currentCard.userAnswer}
                       onClick={() => currentCard.isCorrect === null && submitAnswer(ci)}
                       disabled={currentCard.isCorrect !== null}
                       className={`w-full text-left rounded-lg border p-4 text-body-sm ${
@@ -458,16 +478,17 @@ export default function InterviewClient() {
                           {String.fromCharCode(65 + ci)}
                         </span>
                         <span className="flex-1">{choice}</span>
-                        {currentCard.isRevealed && ci === currentCard.correct_index && (
+                        {currentCard.isCorrect !== null && ci === currentCard.correct_index && (
                           <span className="text-success font-medium">✓ Correct</span>
-                        )}
-                      </div>
+                        )}                      </div>
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="space-y-4">
+                  <label htmlFor="interview-answer" className="sr-only">Your answer</label>
                   <textarea
+                    id="interview-answer"
                     value={(currentCard.userAnswer as string) || ""}
                     onChange={(e) => currentCard.isCorrect === null && setCards((prev) => {
                       const next = [...prev];
@@ -482,7 +503,7 @@ export default function InterviewClient() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => currentCard.isCorrect === null && submitAnswer(currentCard.userAnswer as string)}
-                      disabled={currentCard.isCorrect !== null || !currentCard.userAnswer}
+                      disabled={currentCard.isCorrect !== null || currentCard.isRevealed || !currentCard.userAnswer}
                       className="flex-1 rounded bg-primary-container px-4 py-2 text-body-sm font-medium text-on-primary-container hover:opacity-90 disabled:opacity-40"
                     >
                       Submit Answer
@@ -506,7 +527,7 @@ export default function InterviewClient() {
                 </div>
               )}
 
-              {currentCard.isRevealed && isMcq && currentCard.explanation && (
+              {currentCard.isCorrect !== null && isMcq && currentCard.explanation && (
                 <div className="mt-4 pt-4 border-t border-panel-border">
                   <div className="text-body-sm text-primary">
                     <span className="font-medium">Explanation:</span> {currentCard.explanation}
@@ -517,7 +538,7 @@ export default function InterviewClient() {
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={advanceCard}
-                  disabled={currentCard.isCorrect === null}
+                  disabled={currentCard.isCorrect === null && !currentCard.isRevealed}
                   className="rounded bg-primary-container px-6 py-2 text-body-sm font-semibold text-on-primary-container hover:opacity-90 disabled:opacity-40"
                 >
                   {currentIndex < cards.length - 1 ? "Next →" : "Finish Session"}

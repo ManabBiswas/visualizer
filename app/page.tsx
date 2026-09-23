@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { BackToTop } from "@/components/BackToTop";
 import { HeroFlowchart } from "@/components/HeroFlowchart";
-// import { HeroFlowchart } from "@/components/HeroFlowchart";
-// import { HeroFlowchart } from "@/components/HeroFlowchart";
 
 // Kept in sync with package.json by hand — importing the manifest ships the
 // whole package.json (deps, scripts) into the landing bundle for one string.
@@ -124,9 +122,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="hidden w-full max-w-md shrink-0 lg:block" aria-hidden="true">
-            <div className="panel rounded-lg p-4">
-              <HeroFlowchart />
-            </div>
+            <HeroFlowchart />
           </div>
         </section>
 

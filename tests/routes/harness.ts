@@ -39,8 +39,9 @@ process.env.AUTH_GITHUB_SECRET ??= "test-github-secret";
 // it, the session URL is derived from request headers (host/x-forwarded-proto)
 // and can end up on a mismatched protocol/host, failing the cookie lookup.
 process.env.AUTH_URL ??= "http://localhost:3000";
-delete process.env.TURSO_DATABASE_URL; // never touch the real cloud DB
-delete process.env.NEXT_PUBLIC_ENABLE_RUN;
+  delete process.env.TURSO_DATABASE_URL; // never touch the real cloud DB
+  delete process.env.NEXT_PUBLIC_ENABLE_RUN;
+  delete process.env.REDIS_URL; // never hit a real Redis from route tests
 
 export const TEST_AUTH_SECRET = process.env.AUTH_SECRET;
 

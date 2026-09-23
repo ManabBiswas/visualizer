@@ -41,7 +41,7 @@ CodeLens is a DSA analysis and revision tool for interview preparation. Paste a 
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20.9+
 - npm
 - Java JDK 17+ on `PATH` — only for the opt-in run console and JVM parser cross-check, not for analysis
 - g++ (C++17) on `PATH` — only for the opt-in run console (C++ and C), not for analysis

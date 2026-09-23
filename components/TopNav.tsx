@@ -29,13 +29,17 @@ export function TopNav() {
       >
         CodeLens
       </Link>
-      <nav className="ml-8 flex h-full items-center gap-6">
+      <nav className="ml-8 flex h-full items-center gap-6" aria-label="Primary">
         {links.map((link) => {
-          const active = pathname === link.href;
+          const active =
+            link.href === "/"
+              ? pathname === link.href
+              : pathname === link.href || pathname.startsWith(link.href + "/");
           return (
             <Link
               key={link.href}
               href={link.href}
+              aria-current={active ? "page" : undefined}
               className={`flex h-full items-center border-b-2 text-body-sm ${
                 active
                   ? "border-primary text-on-surface"
@@ -95,7 +99,8 @@ export function TopNav() {
         onClick={toggle}
         className="flex items-center gap-1.5 rounded border border-panel-border px-2.5 py-1 text-body-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
         title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-        aria-label="Toggle color theme"
+        aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+        aria-pressed={theme === "dark"}
       >
         <span aria-hidden="true" suppressHydrationWarning>
           {theme === "dark" ? "☀" : "☾"}

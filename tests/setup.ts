@@ -11,6 +11,8 @@ if (!(globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage) {
 
 // TURSO_DATABASE_URL must never be set in test runs: routes would connect to
 // the real cloud DB instead of the in-memory fixture. Same for the run
-// console flag (tests assert the 501 branch).
+// console flag (tests assert the 501 branch) and REDIS_URL (tests must not
+// hit a real Redis — rate-limit tests use the in-memory fallback).
 delete process.env.TURSO_DATABASE_URL;
 delete process.env.NEXT_PUBLIC_ENABLE_RUN;
+delete process.env.REDIS_URL;

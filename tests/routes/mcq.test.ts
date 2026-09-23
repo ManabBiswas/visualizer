@@ -88,7 +88,7 @@ describe("MCQ format — AI drafting & acceptance", () => {
     expect(row!.correct_index).toBe(0);
     expect(row!.explanation).toContain("accumulating the total sum");
     expect(row!.source).toBe("ai");
-  });
+  }, TIMEOUT);
 
   it("rejects MCQ with wrong number of choices", async () => {
     const { POST } = await import("@/app/api/quiz/cards/route");
@@ -115,7 +115,7 @@ describe("MCQ format — AI drafting & acceptance", () => {
     expect(row).toBeDefined();
     expect(row!.choices).toBeNull();
     expect(row!.correct_index).toBeNull();
-  });
+  }, TIMEOUT);
 
   it("rejects MCQ with invalid correct_index", async () => {
     const { POST } = await import("@/app/api/quiz/cards/route");
@@ -139,5 +139,47 @@ describe("MCQ format — AI drafting & acceptance", () => {
       .get(problemId, "Bad index MCQ") as { correct_index: number | null } | undefined;
     expect(row).toBeDefined();
     expect(row!.correct_index).toBeNull();
-  });
+  }, TIMEOUT);
+
+  it("round-trips MCQ fields through GET /api/quiz (interview contract)", async () => {
+    // Store a valid MCQ, then read it back via the deck endpoint the interview client uses.
+    const { POST } = await import("@/app/api/quiz/cards/route");
+    const storeRes = await callRoute(POST, "/api/quiz/cards", {
+      method: "POST",
+      cookies,
+      body: JSON.stringify({
+        problemId,
+        cards: [{
+          question: "Round-trip MCQ question?",
+          answer: "The correct choice text",
+          line: 3,
+          choices: ["The correct choice text", "Wrong A", "Wrong B", "Wrong C"],
+          correct_index: 0,
+          explanation: "Because the loop accumulates into a[0]."
+        }]
+      }),
+    });
+    expect(storeRes.status).toBe(200);
+    expect((storeRes.body as { accepted: number }).accepted).toBe(1);
+
+    const { GET } = await import("@/app/api/quiz/route");
+    const res = await callRoute(GET, `/api/quiz?problem=${problemId}`, {
+      method: "GET",
+      cookies,
+    });
+    expect(res.status).toBe(200);
+    const cards = (res.body as {
+      cards: Array<{
+        question: string;
+        choices?: string[];
+        correct_index?: number;
+        explanation?: string;
+      }>;
+    }).cards;
+    const mcq = cards.find((c) => c.question === "Round-trip MCQ question?");
+    expect(mcq).toBeDefined();
+    expect(mcq!.choices).toHaveLength(4);
+    expect(mcq!.correct_index).toBe(0);
+    expect(mcq!.explanation).toContain("accumulates");
+  }, TIMEOUT);
 });

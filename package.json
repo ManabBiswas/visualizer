@@ -9,11 +9,14 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ci": "npm run lint && npm run typecheck && npm run test"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
-    "@types/ioredis": "^4.28.10",
     "ioredis": "^6.0.0",
     "java-parser": "^3.0.1",
     "jspdf": "^4.2.1",
@@ -34,7 +37,7 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.6",
     "eslint": "^9.0.0",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.3.4",
     "happy-dom": "^20.11.12",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.8.3",
