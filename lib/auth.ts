@@ -4,11 +4,11 @@ import { assertRequiredEnv } from "@/lib/security/env";
 
 assertRequiredEnv();
 
+// trustHost: pass `true`/`false` only when AUTH_TRUST_HOST is explicitly set;
+
 const AUTH_TRUST_HOST = process.env.AUTH_TRUST_HOST
   ? process.env.AUTH_TRUST_HOST === "true"
-  : process.env.NODE_ENV === "production"
-    ? false
-    : true;
+  : undefined;
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -27,10 +27,6 @@ function asGitHubProfile(profile: unknown): GitHubProfile | null {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [GitHub],
   session: { strategy: "jwt" },
-  // Auth.js v5 only auto-trusts *.vercel.app; localhost and custom domains
-  // need explicit trustHost or every /api/auth/* call 500s with UntrustedHost.
-  // In production, set AUTH_TRUST_HOST to your domain (e.g., "yourdomain.com").
-  // Defaults to "localhost" in dev, false in production (Vercel auto-trusts *.vercel.app).
   trustHost: AUTH_TRUST_HOST,
   // Secure cookie settings
   cookies: {

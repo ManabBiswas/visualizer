@@ -21,7 +21,7 @@ CodeLens is a DSA analysis and revision tool for interview preparation. Paste a 
 - **Optional AI quiz drafting (BYO-key)**: bring your own OpenAI, Gemini, or Anthropic API key to draft quiz cards grounded in your code's static analysis — loop bounds, call targets, and complexity verdicts feed the prompt. Drafts are shown for review and editing, and only cards you explicitly accept enter the deck (marked with an `AI` chip). Your key stays on your device, is sent only to your chosen provider's pinned endpoint, and is never logged or stored server-side. CodeLens itself remains free and keyless
 - **Focus sessions**: one click drills up to 10 cards from your weakest topics — topics ranked by average ease factor (never-reviewed first), interleaved round-robin so one big topic can't monopolize the session
 - **Mistake journal**: cards graded "again" 3+ times stay flagged with a red `lapsed N×` badge and get their own All | Due | Mistakes view — review what you keep failing, not what you know
-- **Progress dashboard** `/progress`: due-today count, per-topic mastery (average ease factor with weakest markers), a 30-day activity heatmap (saves + reviews), and a day streak
+- **Progress dashboard** `/progress`: due-today count, per-topic mastery (average ease factor with weakest markers), a 30-day activity heatmap (saves + reviews), and a day streak — the current streak also shows as a 🔥 badge in the top nav
 - **Public share links** `/p/{slug}`: opt-in per problem — a 12-char unguessable slug renders a read-only analysis page (name, tags, per-method Big-O, source, revision notes) with `noindex`; revoke from the log and the page 404s immediately
 - **Anki export**: download the current quiz view as a tab-separated `.txt` for Anki's basic import
 - **Downloads**: flowchart as PNG or SVG, problem log as Markdown or CSV, single analysis as PDF
@@ -57,6 +57,7 @@ Copy `.env.example` to `.env.local` (dev) or set them in your host's dashboard (
 | `TURSO_AUTH_TOKEN` | prod | Turso DB token (from `turso db tokens create`) |
 | `AUTH_SECRET` | yes | Session-signing key. Generate with `openssl rand -base64 32` |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | yes | GitHub OAuth app credentials (see below) |
+| `AUTH_TRUST_HOST` | no | Set to `true` when serving from a custom domain (non-`*.vercel.app`). On Vercel and in dev it's detected automatically; self-hosted prod without it rejects every `/api/auth/*` call with `UntrustedHost` |
 | `NEXT_PUBLIC_ENABLE_RUN` | no | Set to `1` to enable the run console. Requires a local JDK; leave unset on serverless |
 | `CODELENS_PARSER` | no | `java` to use the JVM parser CLI as a cross-check (default: in-process TS parser) |
 | `JAVAPARSER_JAR` | no | Path to the JavaParser jar if not in the default `~/.m2` location |
@@ -96,6 +97,7 @@ app/                  Next.js routes and pages
   api/problems/       log listing + single-problem retrieval (owner-scoped)
   api/problems/[id]/share/  share-slug create (POST) / revoke (DELETE), owner-gated
   api/progress/       progress-dashboard stats (owner-scoped)
+  api/progress/streak/  lightweight day-streak read for the TopNav 🔥 badge (owner-scoped)
   api/quiz/           quiz cards + spaced-repetition review (owner-scoped)
   api/quiz/cards/     accept reviewed AI-drafted cards (owner-scoped, source='ai')
   api/notes/          quiz answer editing (owner-scoped)
@@ -164,7 +166,7 @@ Input is treated as hostile by default (`lib/security/`):
 - **Abuse**: `/api/analyze` is rate-limited per IP (30/min), `/api/leetcode` at 10/min with an 8s upstream timeout, `/api/run` at 20/min, and the AI drafting endpoint at 5/min; malformed JSON, oversized payloads, and invalid metadata get 400s before any work happens. Rate limiting uses Redis when `REDIS_URL` is set (accurate across serverless instances) and falls back to in-memory per-process buckets otherwise — **set `REDIS_URL` in production** to prevent limit multiplication across instances
 - **BYO-key AI drafting**: provider endpoints are hardcoded (openai/gemini/anthropic only — no user-supplied URLs, so no SSRF), keys are shape-validated and request-scoped, model output is strictly parsed and sanitized (length caps, control-char stripping, per-card validation), and error paths never echo keys back. Drafts are not persisted — accepted cards pass a separate human-approval endpoint that records `source='ai'` provenance
 - **Share links**: slugs are 12-char crypto-random base62 (~71 bits) stored with a partial unique index; the public page validates slug shape before SQL, leaks no user identity, is `noindex`, and revocation nulls the slug so the page 404s immediately — no public listing exists, so a slug is a pure capability URL
-- **Headers**: the proxy sets a strict Content-Security-Policy, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cross-Origin-Opener-Policy`
+- **Headers**: the proxy sets a strict Content-Security-Policy (including `img-src` allowlisting `avatars.githubusercontent.com` for profile avatars), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cross-Origin-Opener-Policy`
 - The parser is spawned with an argument array and `shell: false` — user code only ever reaches the JVM via stdin, never a shell
 
 ## Notes on the parser
@@ -181,7 +183,7 @@ Java parsing runs **in-process in TypeScript** via [java-parser](https://www.npm
 
 ---
 
-v0.4 ships with skeleton loading states, interview mode, diff mode, and C language support. See `docs/ROADMAP.md` (local) for the full plan.
+v0.5 ships with the redesigned hero window, nav streak badge, fixed GitHub avatars (CSP), and Auth.js `trustHost` auto-detection on Vercel.
 
 ---
 Made by Manab.
