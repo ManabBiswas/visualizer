@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { InterviewSkeleton } from "@/components/Skeleton";
-import { toast } from "@/components/Toast";
 
 type QuizCard = {
   id: string;
@@ -110,35 +108,38 @@ export default function InterviewClient() {
   const totalTimeSpentRef = useRef(0);
 
   // Load cards on mount
-  useEffect(() => {
-    async function loadCards() {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (problemId) params.set("problem", problemId);
-        if (topic) params.set("topic", topic);
-        
-        const res = await fetch(`/api/quiz?${params.toString()}`);
-        if (!res.ok) throw new Error("Failed to load cards");
-        const data = await res.json();
-        
-        if (!data.cards || data.cards.length === 0) {
-          setError("No quiz cards found. Add some notes with 'q:' tags or draft AI cards first.");
-          setLoading(false);
-          return;
-        }
-        
-        const weighted = weightCards(data.cards);
-        const selected = pickWeightedRandom(weighted, Math.min(MAX_CARDS, weighted.length));
-        setCards(selected);
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
+  async function loadCards() {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (problemId) params.set("problem", problemId);
+      if (topic) params.set("topic", topic);
+
+      const res = await fetch(`/api/quiz?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to load cards");
+      const data = await res.json();
+
+      if (!data.cards || data.cards.length === 0) {
+        setError("No quiz cards found. Add some notes with 'q:' tags or draft AI cards first.");
         setLoading(false);
+        return;
       }
+
+      const weighted = weightCards(data.cards);
+      const selected = pickWeightedRandom(weighted, Math.min(MAX_CARDS, weighted.length));
+      setCards(selected);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCards();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problemId, topic]);
 
   // Timer
@@ -200,7 +201,7 @@ export default function InterviewClient() {
     
     const timeSpent = Math.floor((Date.now() - cardStartTimeRef.current) / 1000);
     totalTimeSpentRef.current += timeSpent;
-    
+
     setCards((prev) => {
       const next = [...prev];
       next[currentIndex] = {
@@ -211,16 +212,15 @@ export default function InterviewClient() {
       };
       return next;
     });
-    
-    // Auto-advance after a short delay
-    setTimeout(() => {
-      if (currentIndex < cards.length - 1) {
-        setCurrentIndex((i) => i + 1);
-        cardStartTimeRef.current = Date.now();
-      } else {
-        endSession();
-      }
-    }, 1500);
+  }
+
+  function advanceCard() {
+    if (currentIndex < cards.length - 1) {
+      setCurrentIndex((i) => i + 1);
+      cardStartTimeRef.current = Date.now();
+    } else {
+      endSession();
+    }
   }
 
   function getScore(): { correct: number; total: number } {
@@ -246,7 +246,7 @@ export default function InterviewClient() {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="text-center">
-          <div className="text-error text-body-lg mb-4">{error}</div>
+          <div className="flex text-error mb-4">{error}</div>
           <Link href="/analyze" className="rounded bg-primary-container px-4 py-2 text-body-sm font-medium text-on-primary-container hover:opacity-90">
             Go analyze some code
           </Link>
@@ -259,8 +259,8 @@ export default function InterviewClient() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
         <div className="text-center max-w-md">
-          <h1 className="text-headline text-on-surface mb-2">Interview Mode</h1>
-          <p className="text-body text-on-surface-variant mb-6">
+          <div className="mb-4 text-headline-md text-on-surface">Interview Mode</div>
+          <p className="text-body-md text-on-surface-variant mb-6">
             Practice {MAX_CARDS} questions drawn from your deck, weighted toward topics you struggle with.
             Session runs for {SESSION_DURATION / 60} minutes. Hints are hidden until you attempt an answer.
           </p>
@@ -272,7 +272,7 @@ export default function InterviewClient() {
         </div>
         <button
           onClick={startSession}
-          className="rounded bg-primary-container px-8 py-3 text-body-lg font-semibold text-on-primary-container hover:opacity-90"
+          className="rounded bg-primary-container px-8 py-3 text-body-md font-semibold text-on-primary-container hover:opacity-90"
         >
           Start Interview Session
         </button>
@@ -314,10 +314,10 @@ export default function InterviewClient() {
         {sessionComplete ? (
           // Results screen
           <div className="flex flex-col items-center justify-center gap-6 max-w-2xl mx-auto text-center">
-            <h2 className="text-headline text-on-surface">Session Complete</h2>
+            <h2 className="text-headline-md text-on-surface">Session Complete</h2>
             <div className="flex flex-col gap-2">
               <div className="text-5xl font-bold text-on-surface">{correct} / {total}</div>
-              <div className="text-body text-on-surface-variant">
+              <div className="text-body-md text-on-surface-variant">
                 {total > 0 ? Math.round((correct / total) * 100) : 0}% correct
               </div>
               <div className="text-body-sm text-on-surface-variant">
@@ -327,12 +327,14 @@ export default function InterviewClient() {
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 onClick={() => {
+                  setLoading(true);
                   setCards([]);
                   setCurrentIndex(0);
                   setSessionActive(false);
                   setSessionComplete(false);
                   setTimeRemaining(SESSION_DURATION);
                   totalTimeSpentRef.current = 0;
+                  loadCards();
                 }}
                 className="rounded bg-primary-container px-6 py-2 text-body-sm font-medium text-on-primary-container hover:opacity-90"
               >
@@ -368,8 +370,8 @@ export default function InterviewClient() {
                         {card.isCorrect === true ? "✓ Correct" : card.isCorrect === false ? "✗ Incorrect" : "Unanswered"}
                       </span>
                     </div>
-                    <p className="text-body text-on-surface mb-2">{card.question}</p>
-                    {isMcq && card.choices && (
+                    <p className="text-body-md text-on-surface mb-2">{card.question}</p>
+                    {card.choices !== undefined && card.correct_index !== undefined && (
                       <div className="space-y-1 mb-2">
                         {card.choices.map((choice, ci) => (
                           <div
@@ -385,7 +387,7 @@ export default function InterviewClient() {
                         ))}
                       </div>
                     )}
-                    {!isMcq && (
+                    {!(card.choices !== undefined && card.correct_index !== undefined) && (
                       <div className="text-body-sm text-on-surface-variant">
                         <span className="font-medium">Your answer:</span> {card.userAnswer || "(none)"}
                       </div>
@@ -424,7 +426,7 @@ export default function InterviewClient() {
             <div className={`rounded-xl border p-6 ${
               currentCard.isRevealed ? "border-primary/30 bg-primary/5" : "border-panel-border bg-surface-container-lowest"
             }`}>
-              <h3 className="text-body-lg text-on-surface mb-4">{currentCard.question}</h3>
+              <h3 className="text-body-md text-on-surface mb-4">{currentCard.question}</h3>
 
               {isMcq && currentCard.choices ? (
                 <div className="space-y-3">
@@ -433,7 +435,7 @@ export default function InterviewClient() {
                       key={ci}
                       onClick={() => currentCard.isCorrect === null && submitAnswer(ci)}
                       disabled={currentCard.isCorrect !== null}
-                      className={`w-full text-left rounded-lg border p-4 text-body ${
+                      className={`w-full text-left rounded-lg border p-4 text-body-sm ${
                         currentCard.isCorrect !== null
                           ? ci === currentCard.correct_index
                             ? "border-success bg-success/10 text-success"
@@ -444,7 +446,7 @@ export default function InterviewClient() {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center font-mono text-code-sm ${
+                        <span className={`shrink-0 w-8 h-8 rounded-full border flex items-center justify-center font-mono text-code-sm ${
                           currentCard.isCorrect !== null
                             ? ci === currentCard.correct_index
                               ? "border-success text-success bg-success/10"
@@ -475,7 +477,7 @@ export default function InterviewClient() {
                     rows={4}
                     placeholder="Type your answer here…"
                     disabled={currentCard.isCorrect !== null}
-                    className="w-full resize-y rounded border border-panel-border bg-surface-container px-3 py-2 text-body text-on-surface outline-none focus:border-primary disabled:opacity-50"
+                    className="w-full resize-y rounded border border-panel-border bg-surface-container px-3 py-2 text-body-md text-on-surface outline-none focus:border-primary disabled:opacity-50"
                   />
                   <div className="flex gap-2">
                     <button
@@ -511,6 +513,16 @@ export default function InterviewClient() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={advanceCard}
+                  disabled={currentCard.isCorrect === null}
+                  className="rounded bg-primary-container px-6 py-2 text-body-sm font-semibold text-on-primary-container hover:opacity-90 disabled:opacity-40"
+                >
+                  {currentIndex < cards.length - 1 ? "Next →" : "Finish Session"}
+                </button>
+              </div>
             </div>
 
             {/* Navigation */}

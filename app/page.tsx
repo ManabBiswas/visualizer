@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { BackToTop } from "@/components/BackToTop";
+import { HeroFlowchart } from "@/components/HeroFlowchart";
+// import { HeroFlowchart } from "@/components/HeroFlowchart";
+// import { HeroFlowchart } from "@/components/HeroFlowchart";
 
 // Kept in sync with package.json by hand — importing the manifest ships the
 // whole package.json (deps, scripts) into the landing bundle for one string.
@@ -91,32 +94,39 @@ export default function LandingPage() {
     <div data-scroll className="h-full overflow-y-auto">
       <BackToTop />
       <div className="mx-auto flex w-full max-w-5xl flex-col px-container-margin pb-16">
-        <section className="flex flex-col items-start gap-5 pb-14 pt-16">
-          <span className="label-caps rounded-full border border-panel-border bg-surface-container-low px-3 py-1">
-            Java · Python · C++ · C · DSA · Placement prep
-          </span>
-          <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight text-text-high-contrast">
-            Understand your solutions{" "}
-            <span className="text-primary">before the interviewer asks.</span>
-          </h1>
-          <p className="max-w-xl text-body-md text-on-surface-variant">
-            CodeLens turns Java, Python, C++ and C solutions into flowcharts,
-            call graphs and Big-O analysis — then converts your own comments
-            into a spaced-repetition quiz so the reasoning actually sticks.
-          </p>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/analyze"
-              className="rounded bg-primary-container px-5 py-2.5 text-body-sm font-semibold text-on-primary-container hover:opacity-90"
-            >
-              Open the Editor
-            </Link>
-            <Link
-              href="/log"
-              className="rounded border border-panel-border px-5 py-2.5 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-            >
-              Browse the Log
-            </Link>
+        <section className="flex flex-col items-start gap-5 pb-14 pt-16 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+          <div className="flex flex-col items-start gap-5">
+            <span className="label-caps rounded-full border border-panel-border bg-surface-container-low px-3 py-1">
+              Java · Python · C++ · C · DSA · Placement prep
+            </span>
+            <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight text-text-high-contrast">
+              Understand your solutions{" "}
+              <span className="text-primary">before the interviewer asks.</span>
+            </h1>
+            <p className="max-w-xl text-body-md text-on-surface-variant">
+              CodeLens turns Java, Python, C++ and C solutions into flowcharts,
+              call graphs and Big-O analysis — then converts your own comments
+              into a spaced-repetition quiz so the reasoning actually sticks.
+            </p>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/analyze"
+                className="rounded bg-primary-container px-5 py-2.5 text-body-sm font-semibold text-on-primary-container hover:opacity-90"
+              >
+                Open the Editor
+              </Link>
+              <Link
+                href="/log"
+                className="rounded border border-panel-border px-5 py-2.5 text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+              >
+                Browse the Log
+              </Link>
+            </div>
+          </div>
+          <div className="hidden w-full max-w-md shrink-0 lg:block" aria-hidden="true">
+            <div className="panel rounded-lg p-4">
+              <HeroFlowchart />
+            </div>
           </div>
         </section>
 
