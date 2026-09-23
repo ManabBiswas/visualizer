@@ -383,20 +383,6 @@ input:focus, textarea:focus, select:focus {
   animation-delay: 1.15s;
 }
 
-.hero-flowchart .hf-badge {
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: hf-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1.9s forwards;
-}
-.hero-flowchart .hf-badge-chip {
-  stroke-opacity: 0.45;
-  animation: hf-chip-pulse 3s ease-in-out 2.6s infinite;
-}
-.hero-flowchart .hf-conf {
-  animation: hf-conf-pulse 2.4s ease-in-out 2.6s infinite;
-}
-
 @keyframes hf-pop {
   0% { opacity: 0; transform: scale(0.75); }
   100% { opacity: 1; transform: scale(1); }
@@ -411,14 +397,6 @@ input:focus, textarea:focus, select:focus {
 }
 @keyframes hf-fade {
   to { opacity: 1; }
-}
-@keyframes hf-chip-pulse {
-  0%, 100% { stroke-opacity: 0.45; }
-  50% { stroke-opacity: 1; }
-}
-@keyframes hf-conf-pulse {
-  0%, 100% { fill-opacity: 0.75; }
-  50% { fill-opacity: 1; }
 }
 
 /* ── Hover effects ─────────────────────────────────────────── */
@@ -454,31 +432,11 @@ input:focus, textarea:focus, select:focus {
   stroke-width: 2.75;
 }
 
-/* Badge: lift + brighten (transform on children — the pop-in animation
-   owns .hf-badge's transform; brightness bypasses the stroke-opacity pulse) */
-.hero-flowchart .hf-badge > rect,
-.hero-flowchart .hf-badge > text {
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), filter 0.25s ease;
-  cursor: pointer;
-}
-.hero-flowchart .hf-badge:hover > rect,
-.hero-flowchart .hf-badge:hover > text {
-  transform: scale(1.06) translateY(-2px);
-}
-.hero-flowchart .hf-badge:hover {
-  filter: brightness(1.3) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hero-flowchart .hf-node,
   .hero-flowchart .hf-edge,
   .hero-flowchart .hf-edge-loop,
-  .hero-flowchart .hf-labels,
-  .hero-flowchart .hf-badge,
-  .hero-flowchart .hf-badge-chip,
-  .hero-flowchart .hf-conf {
+  .hero-flowchart .hf-labels {
     animation: none !important;
     opacity: 1;
     stroke-opacity: 1;
@@ -490,20 +448,15 @@ input:focus, textarea:focus, select:focus {
   .hero-flowchart,
   .hero-flowchart .hf-node > rect,
   .hero-flowchart .hf-node > path,
-  .hero-flowchart .hf-edge,
-  .hero-flowchart .hf-badge > rect,
-  .hero-flowchart .hf-badge > text {
+  .hero-flowchart .hf-edge {
     transition: none !important;
     cursor: default;
   }
   .hero-flowchart:hover,
   .hero-flowchart .hf-node:hover > rect,
-  .hero-flowchart .hf-node:hover > path,
-  .hero-flowchart .hf-badge:hover > rect,
-  .hero-flowchart .hf-badge:hover > text {
+  .hero-flowchart .hf-node:hover > path {
     transform: none;
     filter: none;
   }
-  .hero-flowchart .hf-badge:hover { filter: none; }
   .hero-flowchart:hover .hf-edge { stroke-width: 2; }
 }

@@ -4,7 +4,7 @@ import { HeroFlowchart } from "@/components/HeroFlowchart";
 
 // Kept in sync with package.json by hand — importing the manifest ships the
 // whole package.json (deps, scripts) into the landing bundle for one string.
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.5.0";
 
 const FEATURES = [
   {

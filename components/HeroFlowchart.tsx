@@ -161,16 +161,6 @@ export function HeroFlowchart() {
           </text>
         </g>
 
-        {/* Complexity badge (product feature callout) */}
-        <g className="hf-badge">
-          <rect className="hf-badge-chip" x="164" y="270" width="144" height="22" rx="11" fill="var(--color-surface-container-high, #262a31)" stroke="var(--color-panel-border, #30363d)" strokeWidth="1" />
-          <text x="236" y="285" textAnchor="middle" fontFamily="var(--font-mono, monospace)" fontSize="9" fontWeight="600">
-            <tspan fill="var(--color-complexity-badge, #ffa657)">O(log n)</tspan>
-            <tspan fill="var(--color-text-muted, #8b949e)"> · </tspan>
-            <tspan className="hf-conf" fill="var(--color-success, #3fb950)">98% conf</tspan>
-          </text>
-        </g>
-
         {/* Traveling pulse along the main path (SMIL — gated for reduced motion) */}
         {!reducedMotion && (
           <>
